@@ -5,16 +5,17 @@
   "description": "Todo list: Express + MongoDB API, React web client and Expo mobile app",
   "type": "module",
   "workspaces": [
-    "packages/*",
+    "packages/shared",
+    "packages/client",
     "apps/*"
   ],
   "engines": {
     "node": ">=22.13"
   },
   "scripts": {
-    "postinstall": "npm run build -w @todo/shared",
-    "dev": "concurrently -k -n shared,api,web -c gray,blue,magenta \"npm:dev:shared\" \"npm:dev:server\" \"npm:dev:web\"",
-    "dev:shared": "npm run dev -w @todo/shared",
+    "postinstall": "npm run build:packages",
+    "build:packages": "npm run build -w @todo/shared && npm run build -w @todo/client",
+    "dev": "concurrently -k -n shared,client,api,web -c gray,gray,blue,magenta \"npm run dev -w @todo/shared\" \"npm run dev -w @todo/client\" \"npm run dev -w @todo/server\" \"npm run dev -w @todo/web\"",
     "dev:server": "npm run dev -w @todo/server",
     "dev:web": "npm run dev -w @todo/web",
     "dev:mobile": "npm run start -w @todo/mobile",
@@ -22,6 +23,7 @@
     "build": "npm run build --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
+    "prelint": "npm run build:packages",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
