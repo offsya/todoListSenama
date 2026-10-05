@@ -1,19 +1,13 @@
-# The whole stack in Docker:
+# The stack from the published images, no source code needed:
 #   cp .env.example .env      # and set JWT_SECRET
-#   docker compose up -d --build
+#   docker compose up -d
 #
 #   http://localhost:8080   web app
 #   http://localhost:8082   mobile app (web build of the Expo app)
 #   http://localhost:4000   API (for the mobile app on a phone or emulator)
 #
-# Only MongoDB, for local development with `npm run dev`:  docker compose up -d mongo
-# (Compose reads the whole file, so .env is needed for that too.)
-#
-# Publishing the images to Docker Hub (https://hub.docker.com/r/offsya/todolistsenamasoft):
-#   docker compose build && docker compose push
-# deploy/docker-compose.yml runs them without the source code; keep the two files in sync.
-#
-# Compose project and image names must be lowercase; containers keep the project's name.
+# Images: https://hub.docker.com/r/offsya/todolistsenamasoft (or `docker load` from an archive).
+# The same stack built from source is ../docker-compose.yml; keep the two in sync.
 name: todolistsenamasoft
 
 services:
@@ -23,10 +17,7 @@ services:
     restart: unless-stopped
     volumes:
       - mongo-data:/data/db
-    # For `npm run dev` and database tools on this machine only: MongoDB runs without a password
-    # here, so it must not be reachable from the network. The API connects over Compose's network.
-    ports:
-      - '127.0.0.1:27017:27017'
+    # No published port: only the API talks to the database (it runs without a password).
     healthcheck:
       test: ['CMD', 'mongosh', '--quiet', '--eval', "db.adminCommand('ping').ok"]
       interval: 10s
@@ -34,9 +25,6 @@ services:
       retries: 5
 
   api:
-    build:
-      context: .
-      target: api
     image: offsya/todolistsenamasoft:api
     container_name: todoListSenamaSoft-api
     restart: unless-stopped
@@ -46,34 +34,25 @@ services:
       MONGODB_URI: mongodb://mongo:27017/todo-app
       JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env (see .env.example)}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
-      # Every request comes through nginx, which sets X-Forwarded-For; rate limiting must see
-      # client IPs.
+      # Every request comes through nginx, which sets X-Forwarded-For.
       TRUST_PROXY: 1
-    # No published port: with TRUST_PROXY, a client talking to the API directly could choose its
-    # own IP for the rate limiter. The web service publishes the API on port 4000 instead.
+    # No published port: the web service publishes the API on port 4000 through nginx.
     depends_on:
       mongo:
         condition: service_healthy
 
   web:
-    build:
-      context: .
-      target: web
     image: offsya/todolistsenamasoft:web
     container_name: todoListSenamaSoft-web
     restart: unless-stopped
     ports:
       - '8080:80'
-      # The API behind nginx (docker/nginx/api-gateway.conf).
       - '4000:4000'
     depends_on:
       api:
         condition: service_healthy
 
   mobile-web:
-    build:
-      context: .
-      target: mobile-web
     image: offsya/todolistsenamasoft:mobile-web
     container_name: todoListSenamaSoft-mobile-web
     restart: unless-stopped
