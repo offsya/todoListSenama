@@ -48,6 +48,7 @@ export function createApiClient(options: ApiClientOptions) {
     const timer = setTimeout(() => controller.abort(), timeoutMs);
 
     let response: Response;
+    let payload: unknown;
     try {
       response = await fetchFn(`${baseUrl}${path}`, {
         method,
@@ -55,6 +56,9 @@ export function createApiClient(options: ApiClientOptions) {
         body: body === undefined ? undefined : JSON.stringify(body),
         signal: controller.signal,
       });
+      // The timeout covers the body too: a connection that stalls halfway through the response
+      // must not leave the request pending forever.
+      payload = response.status === 204 ? undefined : await readJson(response);
     } catch {
       if (controller.signal.aborted) {
         throw new ApiError(0, 'TIMEOUT', 'The server took too long to respond. Please try again.');
@@ -65,8 +69,6 @@ export function createApiClient(options: ApiClientOptions) {
     }
 
     if (response.status === 204) return undefined as T;
-
-    const payload = await readJson(response);
 
     if (!response.ok) {
       // A 401 on a request that carried a token means the session is no longer valid.
