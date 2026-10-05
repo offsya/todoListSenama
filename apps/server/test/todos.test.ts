@@ -1,6 +1,9 @@
 import { TODO_TEXT_MAX_LENGTH } from '@todo/shared';
+import request from 'supertest';
 import { beforeEach, describe, expect, it } from 'vitest';
+import { createApp } from '../src/app.js';
 import { TodoModel } from '../src/modules/todos/todo.model.js';
+import { MAX_TODOS_PER_USER } from '../src/modules/todos/todos.service.js';
 import { asUser, createTodo, createUser, isoDate, missingId, type TestUser } from './helpers.js';
 
 let user: TestUser;
@@ -102,9 +105,16 @@ describe('GET /todos/:id', () => {
 
     expect(res.body.error).toEqual({ code: 'NOT_FOUND', message: 'Todo not found' });
   });
+});
 
-  it('responds with 400 for a malformed id', async () => {
-    const res = await asUser(user).get('/todos/not-an-id').expect(400);
+describe('/todos/:id with a malformed id', () => {
+  // Without the id check Mongoose throws a CastError, which would surface as a 500.
+  it.each([
+    ['GET', () => asUser(user).get('/todos/not-an-id')],
+    ['PUT', () => asUser(user).put('/todos/not-an-id').send({ completed: true })],
+    ['DELETE', () => asUser(user).delete('/todos/not-an-id')],
+  ])('%s responds with 400', async (_, send) => {
+    const res = await send().expect(400);
 
     expect(res.body.error).toMatchObject({
       code: 'VALIDATION_ERROR',
@@ -177,5 +187,50 @@ describe('DELETE /todos/:id', () => {
     await asUser(user).delete(`/todos/${todo.id}`).expect(204);
 
     await asUser(user).delete(`/todos/${todo.id}`).expect(404);
+  });
+});
+
+describe('limits', () => {
+  it(`stops at ${MAX_TODOS_PER_USER} todos per user`, async () => {
+    await TodoModel.insertMany(
+      Array.from({ length: MAX_TODOS_PER_USER }, (_, i) => ({ text: `Todo ${i}`, owner: user.id })),
+    );
+
+    const res = await asUser(user).post('/todos').send({ text: 'One too many' }).expect(409);
+
+    expect(res.body.error).toEqual({
+      code: 'CONFLICT',
+      message: `You can have at most ${MAX_TODOS_PER_USER} todos. Delete some to add new ones.`,
+    });
+    await expect(TodoModel.countDocuments({ owner: user.id })).resolves.toBe(MAX_TODOS_PER_USER);
+    // The limit is per user.
+    await createTodo(await createUser());
+  });
+
+  it('rate-limits requests per user, not per IP', async () => {
+    const limitedApp = createApp({ todosRateLimit: 2 });
+    const other = await createUser();
+    const list = (as: TestUser) =>
+      request(limitedApp).get('/todos').auth(as.token, { type: 'bearer' });
+
+    await list(user).expect(200);
+    await list(user).expect(200);
+    const res = await list(user).expect(429);
+
+    expect(res.body.error).toEqual({
+      code: 'TOO_MANY_REQUESTS',
+      message: 'Too many requests. Please slow down.',
+    });
+    expect(res.headers).toHaveProperty('retry-after');
+    // Same IP, different account.
+    await list(other).expect(200);
+  });
+
+  it('does not count requests without a valid token', async () => {
+    const limitedApp = createApp({ todosRateLimit: 1 });
+
+    await request(limitedApp).get('/todos').expect(401);
+    await request(limitedApp).get('/todos').expect(401);
+    await request(limitedApp).get('/todos').auth(user.token, { type: 'bearer' }).expect(200);
   });
 });

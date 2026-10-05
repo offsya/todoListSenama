@@ -31,6 +31,8 @@ const envSchema = z
     PASSWORD_HASH_COST: z.coerce.number().int().min(10).max(20).default(15),
     /** Max login/registration attempts per IP and endpoint within the 15-minute window. */
     AUTH_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(20),
+    /** Max requests to /todos per user within a minute: far above what a person clicks. */
+    TODOS_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(300),
     /** Number of reverse proxies in front of the API, so rate limiting sees real client IPs. */
     TRUST_PROXY: z.coerce.number().int().min(0).default(0),
   })
