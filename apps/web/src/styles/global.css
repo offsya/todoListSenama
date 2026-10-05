@@ -1,0 +1,109 @@
+:root {
+  color-scheme: light dark;
+
+  --color-bg: #f4f5fb;
+  --color-surface: #ffffff;
+  --color-surface-muted: #f6f7fb;
+  --color-text: #181b26;
+  --color-text-muted: #636a80;
+  --color-border: #e3e6ef;
+  --color-primary: #4f46e5;
+  --color-primary-hover: #4338ca;
+  --color-primary-soft: #eef0ff;
+  --color-on-primary: #ffffff;
+  --color-danger: #d92d20;
+  --color-danger-soft: #fef1f0;
+
+  --radius-sm: 8px;
+  --radius: 12px;
+  --radius-lg: 18px;
+  --shadow: 0 1px 2px rgb(20 22 40 / 6%), 0 12px 32px rgb(20 22 40 / 7%);
+  --focus-ring: 0 0 0 3px rgb(79 70 229 / 35%);
+  --transition: 150ms ease;
+
+  font-family:
+    Inter,
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    'Helvetica Neue',
+    Arial,
+    sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--color-text);
+  background: var(--color-bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg: #0e1016;
+    --color-surface: #161922;
+    --color-surface-muted: #1c202b;
+    --color-text: #e9ebf3;
+    --color-text-muted: #99a0b5;
+    --color-border: #2a2f3d;
+    --color-primary: #7f77ff;
+    --color-primary-hover: #948dff;
+    --color-primary-soft: rgb(127 119 255 / 14%);
+    --color-on-primary: #0e1016;
+    --color-danger: #ff7a6e;
+    --color-danger-soft: rgb(255 122 110 / 12%);
+    --shadow: 0 1px 2px rgb(0 0 0 / 40%), 0 12px 32px rgb(0 0 0 / 30%);
+    --focus-ring: 0 0 0 3px rgb(127 119 255 / 40%);
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+#root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+h1,
+h2,
+p {
+  margin: 0;
+}
+
+button,
+input {
+  font: inherit;
+  color: inherit;
+}
+
+a {
+  color: var(--color-primary);
+  font-weight: 500;
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition: none !important;
+    animation: none !important;
+  }
+}

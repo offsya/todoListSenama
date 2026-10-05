@@ -1,0 +1,28 @@
+.title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.subtitle {
+  margin-top: 4px;
+  color: var(--color-text-muted);
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 24px;
+}
+
+.submit {
+  margin-top: 4px;
+}
+
+.footer {
+  margin-top: 24px;
+  text-align: center;
+  font-size: 0.9375rem;
+  color: var(--color-text-muted);
+}
