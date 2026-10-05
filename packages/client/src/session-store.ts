@@ -51,6 +51,8 @@ export function createSessionStore(
 
   const reload = async () => {
     const startedAt = version;
+    // Let our own pending writes land first, or we would read the value they are replacing.
+    await pendingWrite;
     let raw: string | null = null;
     try {
       raw = await storage.getItem(key);

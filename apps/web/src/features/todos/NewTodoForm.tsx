@@ -5,6 +5,9 @@ import { useForm } from 'react-hook-form';
 import { Button } from '../../components/Button';
 import styles from './NewTodoForm.module.css';
 
+/** Focus target when the last visible todo is deleted. */
+export const NEW_TODO_INPUT_ID = 'new-todo';
+
 export function NewTodoForm() {
   const createTodo = useCreateTodo();
   const {
@@ -28,6 +31,7 @@ export function NewTodoForm() {
     <form className={styles.form} onSubmit={onSubmit} noValidate>
       <div className={styles.row}>
         <input
+          id={NEW_TODO_INPUT_ID}
           className={styles.input}
           placeholder="What needs to be done?"
           aria-label="New todo"

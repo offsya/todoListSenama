@@ -1,5 +1,5 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { TodoClientProvider, type Session } from '@todo/client';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { createQueryClient, TodoClientProvider, type Session } from '@todo/client';
 import { render } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createMemoryRouter } from 'react-router';
@@ -17,9 +17,8 @@ interface RenderAppOptions {
 export function renderApp(path = '/', { session }: RenderAppOptions = {}) {
   if (session) sessionStore.set(session);
 
-  const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-  });
+  // The production defaults (e.g. staleTime), minus retries that would slow down error tests.
+  const queryClient = createQueryClient({ queries: { retry: false } });
   const router = createMemoryRouter(routes, { initialEntries: [path] });
   const user = userEvent.setup();
 

@@ -17,16 +17,18 @@ import styles from './TodosPage.module.css';
 
 export function TodosPage() {
   const todos = useTodos();
-  const updateTodo = useUpdateTodo();
-  const deleteTodo = useDeleteTodo();
+  // Edits are optimistic: a failed one is rolled back and reported here, because the item
+  // itself may already be filtered out of view.
+  const [actionError, setActionError] = useState<unknown>(null);
+  const updateTodo = useUpdateTodo({ onError: setActionError });
+  const deleteTodo = useDeleteTodo({ onError: setActionError });
   const [filter, setFilter] = useState<TodoFilter>('all');
 
-  // Edits are optimistic, so failures are reported here: the item itself may be filtered out.
-  const actionError = updateTodo.error ?? deleteTodo.error;
-  const dismissActionError = () => {
-    updateTodo.reset();
-    deleteTodo.reset();
-  };
+  const retryButton = (
+    <Button variant="ghost" onClick={() => void todos.refetch()}>
+      Retry
+    </Button>
+  );
 
   const renderList = (items: Todo[]) => {
     const activeFilter = getTodoFilter(filter);
@@ -70,6 +72,23 @@ export function TodosPage() {
     );
   };
 
+  const renderContent = () => {
+    // Keep showing loaded todos when a background refresh fails.
+    if (todos.data) return renderList(todos.data);
+    if (todos.isPending) {
+      return (
+        <div className={styles.state}>
+          <Spinner label="Loading todos" />
+        </div>
+      );
+    }
+    return (
+      <div className={styles.state}>
+        <Alert action={retryButton}>{getErrorMessage(todos.error)}</Alert>
+      </div>
+    );
+  };
+
   const activeCount = todos.data?.filter((todo) => !todo.completed).length ?? 0;
 
   return (
@@ -86,10 +105,10 @@ export function TodosPage() {
 
       <NewTodoForm />
 
-      {actionError && (
+      {actionError !== null && (
         <Alert
           action={
-            <Button variant="ghost" onClick={dismissActionError}>
+            <Button variant="ghost" onClick={() => setActionError(null)}>
               Dismiss
             </Button>
           }
@@ -97,28 +116,13 @@ export function TodosPage() {
           {getErrorMessage(actionError)}
         </Alert>
       )}
+      {todos.data && todos.isError && (
+        <Alert action={retryButton}>
+          Could not refresh the list: {getErrorMessage(todos.error)}
+        </Alert>
+      )}
 
-      <div className={styles.card}>
-        {todos.isPending ? (
-          <div className={styles.state}>
-            <Spinner label="Loading todos" />
-          </div>
-        ) : todos.isError ? (
-          <div className={styles.state}>
-            <Alert
-              action={
-                <Button variant="ghost" onClick={() => void todos.refetch()}>
-                  Retry
-                </Button>
-              }
-            >
-              {getErrorMessage(todos.error)}
-            </Alert>
-          </div>
-        ) : (
-          renderList(todos.data)
-        )}
-      </div>
+      <div className={styles.card}>{renderContent()}</div>
     </section>
   );
 }

@@ -76,6 +76,9 @@ describe('TodosPage', () => {
 
     expect(await screen.findByText('Buy oat milk')).toBeInTheDocument();
     await waitFor(() => expect(findStoredTodo('Buy oat milk')).toBeDefined());
+    // The same Enter keystroke must not reopen the editor through the focused Edit button.
+    expect(screen.queryByRole('textbox', { name: 'Edit todo' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Edit "Buy oat milk"' })).toHaveFocus();
   });
 
   it('cancels editing with Escape', async () => {
@@ -159,5 +162,61 @@ describe('TodosPage', () => {
     await user.click(screen.getByRole('button', { name: 'Retry' }));
 
     expect(await screen.findByText('Buy milk')).toBeInTheDocument();
+  });
+
+  it('reports a failed edit even when a later one succeeds', async () => {
+    const failing = seedTodo(session, 'Fails');
+    seedTodo(session, 'Succeeds');
+    server.use(
+      http.put(`${API_URL}/todos/:id`, async ({ params }) => {
+        if (params.id !== failing.id) return undefined; // fall through to the fake API
+        await new Promise((resolve) => setTimeout(resolve, 50)); // fail after the other one
+        return apiError(500, 'INTERNAL_ERROR', 'Internal server error');
+      }),
+    );
+    const { user } = renderApp('/', { session });
+
+    await user.click(await screen.findByRole('checkbox', { name: 'Fails' }));
+    await user.click(screen.getByRole('checkbox', { name: 'Succeeds' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Internal server error');
+    await waitFor(() => expect(screen.getByRole('checkbox', { name: 'Fails' })).not.toBeChecked());
+    expect(screen.getByRole('checkbox', { name: 'Succeeds' })).toBeChecked();
+  });
+
+  it('keeps showing the list when a background refresh fails', async () => {
+    seedTodo(session, 'Buy milk');
+    const { user } = renderApp('/', { session });
+    await screen.findByText('Buy milk');
+    server.use(
+      http.get(`${API_URL}/todos`, () => apiError(500, 'INTERNAL_ERROR', 'Internal server error')),
+    );
+
+    // Adding a todo resyncs the list from the server, which now fails.
+    await user.type(screen.getByLabelText('New todo'), 'Buy bread{Enter}');
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Could not refresh the list');
+    expect(screen.getByText('Buy milk')).toBeInTheDocument();
+    expect(screen.getByText('Buy bread')).toBeInTheDocument();
+  });
+
+  it('gives focus back to the edit button after editing with the keyboard', async () => {
+    seedTodo(session, 'Buy milk');
+    const { user } = renderApp('/', { session });
+
+    await user.click(await screen.findByRole('button', { name: 'Edit "Buy milk"' }));
+    await user.keyboard('{Escape}');
+
+    expect(screen.getByRole('button', { name: 'Edit "Buy milk"' })).toHaveFocus();
+  });
+
+  it('moves focus to the next todo after a deletion', async () => {
+    seedTodo(session, 'Second');
+    seedTodo(session, 'First');
+    const { user } = renderApp('/', { session });
+
+    await user.click(await screen.findByRole('button', { name: 'Delete "First"' }));
+
+    expect(screen.getByRole('checkbox', { name: 'Second' })).toHaveFocus();
   });
 });

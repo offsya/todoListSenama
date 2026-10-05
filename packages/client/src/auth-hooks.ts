@@ -1,8 +1,9 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
 import type { LoginInput, RegisterInput } from '@todo/shared';
 import { useTodoClient } from './context.js';
 
-// Screens do not navigate after signing in or out: route guards react to the session change.
+// Screens do not navigate after signing in or out: route guards react to the session change,
+// and TodoClientProvider clears the previous user's cached data.
 
 export function useSignIn() {
   const { api, sessionStore } = useTodoClient();
@@ -22,11 +23,5 @@ export function useSignUp() {
 
 export function useSignOut(): () => void {
   const { sessionStore } = useTodoClient();
-  const queryClient = useQueryClient();
-
-  return () => {
-    sessionStore.set(null);
-    // Do not keep the previous user's data in memory.
-    queryClient.clear();
-  };
+  return () => sessionStore.set(null);
 }
