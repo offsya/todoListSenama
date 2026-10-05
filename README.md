@@ -60,13 +60,15 @@ graph LR
 
 ## Запуск в Docker
 
-Весь стек — MongoDB, API, веб и веб-сборка мобильного приложения — поднимается одной командой. Нужен только Docker (на Windows — Docker Desktop с WSL 2).
+Весь стек — MongoDB, API, веб и веб-сборка мобильного приложения — поднимается одной командой и без какой-либо настройки. Нужен только Docker (на Windows — Docker Desktop с WSL 2).
 
-Создайте `.env` рядом с `docker-compose.yml` и впишите в него `JWT_SECRET` — случайную строку от 32 символов. Команды для генерации (через Node.js или `openssl`) есть в самом файле.
+Без исходников, из готовых образов на [Docker Hub](https://hub.docker.com/r/offsya/todolistsenamasoft), в любой папке:
 
 ```bash
-cp .env.example .env
+docker compose -f oci://docker.io/offsya/todolistsenamasoft:compose up -d
 ```
+
+Из исходников, в корне репозитория:
 
 ```bash
 docker compose up -d --build
@@ -89,23 +91,25 @@ npm run smoke
 - Веб и мобильная веб-сборка обращаются к API через встроенный nginx по тому же адресу (`/api`), поэтому CORS не нужен.
 - Наружу опубликован только nginx. Сам контейнер API закрыт: лимиты попыток входа доверяют заголовку `X-Forwarded-For` только от nginx, и прямой доступ позволил бы их обойти. Порт 4000 тоже обслуживает nginx.
 - MongoDB работает без пароля, поэтому её порт открыт только на `127.0.0.1` — для `npm run dev` и инструментов вроде Compass на этой машине.
-- nginx отдаёт страницы с Content-Security-Policy и запретом встраивания во фреймы. API работает в production-режиме от непривилегированного пользователя и не запустится без настоящего `JWT_SECRET`.
+- nginx отдаёт страницы с Content-Security-Policy и запретом встраивания во фреймы. API работает в production-режиме от непривилегированного пользователя.
+- Секрет для подписи токенов можно не задавать. При первом запуске API генерирует случайный секрет и хранит его в volume `api-data`, поэтому у каждой установки он свой, а выданные токены переживают перезапуски. Свой `JWT_SECRET` и срок жизни токенов можно задать в `.env` (шаблон — `.env.example`).
 
-Остановить (данные MongoDB сохранятся в volume):
+Остановить (данные сохранятся в volume):
 
 ```bash
 docker compose down
 ```
 
+Стек, запущенный из Docker Hub, останавливается по имени проекта: `docker compose -p todolistsenamasoft down`.
+
 ### Готовые образы
 
-Чтобы запустить стек без исходников и без сборки, достаточно папки [`deploy/`](deploy): в ней `docker-compose.yml` с образами из Docker Hub, `.env.example` и короткая инструкция. Получатель копирует папку, создаёт `.env` и выполняет `docker compose up -d`.
+Запустить стек без исходников можно двумя способами:
 
-Сам compose-файл тоже опубликован на Docker Hub (тег `compose`), поэтому можно обойтись и без папки. Достаточно файла `.env` с `JWT_SECRET` в пустой папке и одной команды (Compose попросит подтвердить переменные):
+- одной командой из раздела выше: compose-файл опубликован на Docker Hub с тегом `compose`;
+- из папки [`deploy/`](deploy): в ней тот же `docker-compose.yml` и короткая инструкция, получатель копирует папку и выполняет `docker compose up -d`.
 
-```bash
-docker compose -f oci://docker.io/offsya/todolistsenamasoft:compose up -d
-```
+В опубликованном compose-файле намеренно нет переменных `${...}`: перед запуском опубликованного стека Compose просит подтвердить каждую переменную, и запуск перестал бы быть «просто командой».
 
 Обновить образы на Docker Hub после изменений (нужен `docker login` с доступом к `offsya`):
 
@@ -125,10 +129,10 @@ docker save offsya/todolistsenamasoft:api offsya/todolistsenamasoft:web offsya/t
 
 Получатель загружает архив командой `docker load -i todolistsenamasoft-images.tar` и запускает стек из папки `deploy/`.
 
-После изменений в `deploy/docker-compose.yml` его нужно опубликовать заново. Compose проверяет обязательные переменные ещё при загрузке, поэтому `JWT_SECRET` нужно задать любым значением. В публикацию попадает только сам файл, без значений переменных:
+После изменений в `deploy/docker-compose.yml` его нужно опубликовать заново:
 
 ```bash
-cd deploy && JWT_SECRET=placeholder docker compose publish offsya/todolistsenamasoft:compose
+cd deploy && docker compose publish offsya/todolistsenamasoft:compose
 ```
 
 ## Локальный запуск для разработки
@@ -145,7 +149,7 @@ npm install
 cp apps/server/.env.example apps/server/.env
 ```
 
-Запустите только MongoDB из Docker (Compose читает весь файл, поэтому корневой `.env` из раздела выше нужен и здесь):
+Запустите только MongoDB из Docker:
 
 ```bash
 docker compose up -d mongo

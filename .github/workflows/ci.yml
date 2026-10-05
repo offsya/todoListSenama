@@ -72,10 +72,8 @@ jobs:
         with:
           node-version-file: .nvmrc
 
-      - name: Create .env
-        run: echo "JWT_SECRET=$(openssl rand -hex 32)" > .env
-
-      # --wait returns once every container reports healthy.
+      # No .env on purpose: the stack must work without any configuration (the API generates its
+      # JWT secret). --wait returns once every container reports healthy.
       - name: Build and start the stack
         run: docker compose up -d --build --wait --wait-timeout 300
 

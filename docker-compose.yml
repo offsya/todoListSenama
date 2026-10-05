@@ -1,13 +1,12 @@
-# The whole stack in Docker:
-#   cp .env.example .env      # and set JWT_SECRET
+# The whole stack in Docker, no configuration needed:
 #   docker compose up -d --build
 #
 #   http://localhost:8080   web app
 #   http://localhost:8082   mobile app (web build of the Expo app)
 #   http://localhost:4000   API (for the mobile app on a phone or emulator)
 #
+# Optional settings go to .env (see .env.example).
 # Only MongoDB, for local development with `npm run dev`:  docker compose up -d mongo
-# (Compose reads the whole file, so .env is needed for that too.)
 #
 # Publishing the images to Docker Hub (https://hub.docker.com/r/offsya/todolistsenamasoft):
 #   docker compose build && docker compose push
@@ -44,11 +43,14 @@ services:
     environment:
       NODE_ENV: production
       MONGODB_URI: mongodb://mongo:27017/todo-app
-      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env (see .env.example)}
+      # Unset: the API generates a random secret on the first start and keeps it in api-data.
+      JWT_SECRET: ${JWT_SECRET:-}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
       # Every request comes through nginx, which sets X-Forwarded-For; rate limiting must see
       # client IPs.
       TRUST_PROXY: 1
+    volumes:
+      - api-data:/var/lib/todo-api
     # No published port: with TRUST_PROXY, a client talking to the API directly could choose its
     # own IP for the rate limiter. The web service publishes the API on port 4000 instead.
     depends_on:
@@ -85,3 +87,4 @@ services:
 
 volumes:
   mongo-data:
+  api-data:

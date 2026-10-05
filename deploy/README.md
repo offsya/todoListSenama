@@ -1,20 +1,20 @@
 # todoListSenamaSoft: запуск из готовых образов
 
-Список задач с регистрацией: API (Node.js + MongoDB), веб-клиент и веб-версия мобильного приложения. Здесь всё запускается из готовых образов с [Docker Hub](https://hub.docker.com/r/offsya/todolistsenamasoft), исходники не нужны.
+Список задач с регистрацией: API (Node.js + MongoDB), веб-клиент и веб-версия мобильного приложения. Всё запускается из готовых образов с [Docker Hub](https://hub.docker.com/r/offsya/todolistsenamasoft), исходники не нужны.
 
-Нужен только Docker (на Windows — Docker Desktop с WSL 2).
+Нужен только Docker (на Windows — Docker Desktop с WSL 2). Настраивать ничего не нужно: секрет для подписи токенов API сгенерирует сам при первом запуске.
 
 ## Одной командой
 
-Создайте пустую папку, а в ней файл `.env` с одной строкой: `JWT_SECRET=` и любая случайная строка от 32 символов. Затем выполните в этой папке:
+В любой папке:
 
 ```bash
 docker compose -f oci://docker.io/offsya/todolistsenamasoft:compose up -d
 ```
 
-Compose скачает описание стека и все образы, включая MongoDB. Перед запуском он покажет найденные переменные и спросит подтверждение — ответьте `Y`. В этой таблице `JWT_SECRET` может значиться как `<unset>`, но значение всё равно берётся из `.env`.
+Compose скачает описание стека и все образы, включая MongoDB, и запустит их.
 
-Остановить (задачи и пользователи сохранятся в volume):
+Остановить (задачи и пользователи сохранятся):
 
 ```bash
 docker compose -p todolistsenamasoft down
@@ -22,12 +22,11 @@ docker compose -p todolistsenamasoft down
 
 ## Из этой папки
 
-1. Скопируйте `.env.example` в `.env` и впишите в `JWT_SECRET` любую случайную строку от 32 символов.
-2. Если вам прислали архив с образами, загрузите его (иначе образы скачаются с Docker Hub сами):
+1. Если рядом лежит архив с образами, загрузите его (иначе образы скачаются с Docker Hub сами):
    ```bash
    docker load -i todolistsenamasoft-images.tar.gz
    ```
-3. Запустите:
+2. Запустите:
    ```bash
    docker compose up -d
    ```

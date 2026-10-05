@@ -1,13 +1,15 @@
-# The stack from the published images, no source code needed:
-#   cp .env.example .env      # and set JWT_SECRET
+# The stack from the published images: no source code and no configuration needed.
 #   docker compose up -d
+# or, without even downloading this file:
+#   docker compose -f oci://docker.io/offsya/todolistsenamasoft:compose up -d
 #
 #   http://localhost:8080   web app
 #   http://localhost:8082   mobile app (web build of the Expo app)
 #   http://localhost:4000   API (for the mobile app on a phone or emulator)
 #
 # Images: https://hub.docker.com/r/offsya/todolistsenamasoft (or `docker load` from an archive).
-# The same stack built from source is ../docker-compose.yml; keep the two in sync.
+# The same stack built from source is ../docker-compose.yml; keep the two in sync. This file has
+# no ${VARIABLES} on purpose: Compose asks to confirm them when it runs a published stack.
 name: todolistsenamasoft
 
 services:
@@ -32,10 +34,11 @@ services:
     environment:
       NODE_ENV: production
       MONGODB_URI: mongodb://mongo:27017/todo-app
-      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env (see .env.example)}
-      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
       # Every request comes through nginx, which sets X-Forwarded-For.
       TRUST_PROXY: 1
+    # The JWT secret: a random one is generated on the first start and kept in this volume.
+    volumes:
+      - api-data:/var/lib/todo-api
     # No published port: the web service publishes the API on port 4000 through nginx.
     depends_on:
       mongo:
@@ -64,3 +67,4 @@ services:
 
 volumes:
   mongo-data:
+  api-data:
