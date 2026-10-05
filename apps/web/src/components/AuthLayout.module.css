@@ -1,0 +1,23 @@
+.page {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  padding: 48px 16px;
+  background:
+    radial-gradient(circle at 15% 10%, var(--color-primary-soft), transparent 45%),
+    radial-gradient(circle at 85% 90%, var(--color-primary-soft), transparent 40%);
+}
+
+.card {
+  width: 100%;
+  max-width: 400px;
+  padding: 32px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow);
+}
+
+.brand {
+  margin-bottom: 28px;
+}
