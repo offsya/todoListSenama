@@ -10,6 +10,7 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "build": "expo export --platform android",
+    "lint": "eslint .",
     "pretypecheck": "npm run build -w @todo/shared && npm run build -w @todo/client",
     "typecheck": "tsc --noEmit",
     "pretest": "npm run build -w @todo/shared && npm run build -w @todo/client",
