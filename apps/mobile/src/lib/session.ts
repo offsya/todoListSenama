@@ -17,3 +17,8 @@ const webStorage: KeyValueStorage = {
 };
 
 export const sessionStore = createSessionStore(Platform.OS === 'web' ? webStorage : secureStorage);
+
+// In the browser, keep tabs in sync like the web app: signing out in one tab signs out the others.
+if (Platform.OS === 'web') {
+  window.addEventListener('storage', () => void sessionStore.reload());
+}

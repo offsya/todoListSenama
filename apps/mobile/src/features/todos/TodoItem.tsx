@@ -2,7 +2,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTodoTextEditor } from '@todo/client';
 import { TODO_TEXT_MAX_LENGTH, type Todo } from '@todo/shared';
 import { memo, useState } from 'react';
-import { Pressable, Text, TextInput, View } from 'react-native';
+import { Platform, Pressable, Text, TextInput, View } from 'react-native';
 import { IconButton } from '../../components/IconButton';
 import { makeStyles, radius, useColors } from '../../theme';
 
@@ -31,6 +31,7 @@ export const TodoItem = memo(function TodoItem({
   return (
     <View style={styles.row}>
       <Pressable
+        {...(Platform.OS === 'web' && { onKeyDown: toggleOnSpace(() => onToggle(todo)) })}
         role="checkbox"
         aria-checked={todo.completed}
         aria-label={todo.text}
@@ -68,6 +69,18 @@ export const TodoItem = memo(function TodoItem({
   );
 });
 
+/**
+ * react-native-web presses an element on Space only when its role is "button", so a custom
+ * checkbox has to handle the key itself (Enter already works).
+ */
+function toggleOnSpace(toggle: () => void) {
+  return (event: { key: string; preventDefault: () => void }) => {
+    if (event.key !== ' ') return;
+    event.preventDefault(); // no page scroll
+    toggle();
+  };
+}
+
 interface TodoTextEditorProps {
   initialText: string;
   onSave: (text: string) => void;
@@ -87,7 +100,10 @@ function TodoTextEditor(props: TodoTextEditorProps) {
         onSubmitEditing={editor.submit}
         onBlur={editor.blur}
         // Keep the keyboard open on submit, so a validation error can be fixed in place.
+        // react-native-web ignores submitBehavior and reads only blurOnSubmit; on iOS and
+        // Android submitBehavior takes precedence.
         submitBehavior="submit"
+        blurOnSubmit={false}
         returnKeyType="done"
         maxLength={TODO_TEXT_MAX_LENGTH}
         aria-label="Edit todo"
