@@ -8,9 +8,8 @@
 # Optional settings go to .env (see .env.example).
 # Only MongoDB, for local development with `npm run dev`:  docker compose up -d mongo
 #
-# Publishing the images to Docker Hub (https://hub.docker.com/r/offsya/todolistsenamasoft):
-#   docker compose build && docker compose push
-# deploy/docker-compose.yml runs them without the source code; keep the two files in sync.
+# The images built here stay local (todolistsenamasoft-api, -web, -mobile-web). Docker Hub has
+# only the all-in-one image for Docker Desktop, see the all-in-one target in the Dockerfile.
 #
 # Compose project and image names must be lowercase; containers keep the project's name.
 name: todolistsenamasoft
@@ -36,7 +35,6 @@ services:
     build:
       context: .
       target: api
-    image: offsya/todolistsenamasoft:api
     container_name: todoListSenamaSoft-api
     restart: unless-stopped
     init: true
@@ -61,7 +59,6 @@ services:
     build:
       context: .
       target: web
-    image: offsya/todolistsenamasoft:web
     container_name: todoListSenamaSoft-web
     restart: unless-stopped
     ports:
@@ -76,7 +73,6 @@ services:
     build:
       context: .
       target: mobile-web
-    image: offsya/todolistsenamasoft:mobile-web
     container_name: todoListSenamaSoft-mobile-web
     restart: unless-stopped
     ports:
