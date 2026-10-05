@@ -1,3 +1,5 @@
+/* Contrast (WCAG 2.1): text >= 4.5:1, borders that identify controls (inputs) >= 3:1.
+   --color-border is for decorative separators only. */
 :root {
   color-scheme: light dark;
 
@@ -7,11 +9,13 @@
   --color-text: #181b26;
   --color-text-muted: #636a80;
   --color-border: #e3e6ef;
+  --color-border-strong: #8a90a3;
   --color-primary: #4f46e5;
+  --color-primary-text: #4f46e5;
   --color-primary-hover: #4338ca;
   --color-primary-soft: #eef0ff;
   --color-on-primary: #ffffff;
-  --color-danger: #d92d20;
+  --color-danger: #b42318;
   --color-danger-soft: #fef1f0;
 
   --radius-sm: 8px;
@@ -45,7 +49,9 @@
     --color-text: #e9ebf3;
     --color-text-muted: #99a0b5;
     --color-border: #2a2f3d;
+    --color-border-strong: #666c80;
     --color-primary: #7f77ff;
+    --color-primary-text: #9c96ff;
     --color-primary-hover: #948dff;
     --color-primary-soft: rgb(127 119 255 / 14%);
     --color-on-primary: #0e1016;
