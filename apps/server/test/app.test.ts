@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { api } from './helpers.js';
+import { api, asUser, createUser } from './helpers.js';
 
 describe('application', () => {
   it('reports health', async () => {
@@ -30,5 +30,37 @@ describe('application', () => {
 
     expect(allowed.headers['access-control-allow-origin']).toBe('http://localhost:5173');
     expect(denied.headers).not.toHaveProperty('access-control-allow-origin');
+  });
+});
+
+describe('malformed requests are client errors, not crashes', () => {
+  it('rejects a body that claims to be gzip but is not', async () => {
+    const res = await api()
+      .post('/auth/login')
+      .set('Content-Type', 'application/json')
+      .set('Content-Encoding', 'gzip')
+      .send('{"email":"a@example.com","password":"x"}')
+      .expect(400);
+
+    expect(res.body.error).toEqual({ code: 'BAD_REQUEST', message: 'Bad Request' });
+  });
+
+  it('rejects an unsupported content encoding', async () => {
+    const res = await api()
+      .post('/auth/login')
+      .set('Content-Type', 'application/json')
+      .set('Content-Encoding', 'compress')
+      .send('{}')
+      .expect(415);
+
+    expect(res.body.error).toEqual({ code: 'BAD_REQUEST', message: 'Unsupported Media Type' });
+  });
+
+  it('rejects an invalid percent-encoding in the URL', async () => {
+    const user = await createUser();
+
+    const res = await asUser(user).get('/todos/%E0%A4%A').expect(400);
+
+    expect(res.body.error.code).toBe('BAD_REQUEST');
   });
 });

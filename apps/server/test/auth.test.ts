@@ -23,13 +23,13 @@ describe('POST /auth/register', () => {
     await asUser(res.body).get('/todos').expect(200);
   });
 
-  it('stores a bcrypt hash instead of the password', async () => {
+  it('stores a salted scrypt hash instead of the password', async () => {
     await api().post('/auth/register').send({ email: 'alice@example.com', password: PASSWORD });
 
     const user = await UserModel.findOne({ email: 'alice@example.com' })
       .select('+passwordHash')
       .lean();
-    expect(user?.passwordHash).toMatch(/^\$2[aby]\$04\$/);
+    expect(user?.passwordHash).toMatch(/^scrypt\$10\$8\$3\$[\w+/=]+\$[\w+/=]+$/);
     expect(user?.passwordHash).not.toContain(PASSWORD);
   });
 
@@ -191,15 +191,40 @@ describe('rate limiting', () => {
     expect(res.headers).toHaveProperty('retry-after');
   });
 
-  it('does not count successful logins', async () => {
+  it('counts successful logins too: each attempt costs a password hash', async () => {
     const limitedApp = createApp({ authRateLimit: 2 });
     const user = await createUser();
+    const login = () =>
+      request(limitedApp).post('/auth/login').send({ email: user.email, password: user.password });
 
-    for (let i = 0; i < 4; i += 1) {
-      await request(limitedApp)
+    await login().expect(200);
+    await login().expect(200);
+    await login().expect(429);
+  });
+
+  it('limits registrations separately from logins', async () => {
+    const limitedApp = createApp({ authRateLimit: 1 });
+    const register = (email: string) =>
+      request(limitedApp).post('/auth/register').send({ email, password: PASSWORD });
+
+    await register('first@example.com').expect(201);
+    await register('second@example.com').expect(429);
+    await request(limitedApp)
+      .post('/auth/login')
+      .send({ email: 'first@example.com', password: PASSWORD })
+      .expect(200);
+  });
+
+  it('tells clients apart by X-Forwarded-For behind a trusted proxy', async () => {
+    const proxiedApp = createApp({ authRateLimit: 1, trustProxy: 1 });
+    const attemptFrom = (ip: string) =>
+      request(proxiedApp)
         .post('/auth/login')
-        .send({ email: user.email, password: user.password })
-        .expect(200);
-    }
+        .set('X-Forwarded-For', ip)
+        .send({ email: 'nobody@example.com', password: 'guess' });
+
+    await attemptFrom('203.0.113.1').expect(401);
+    await attemptFrom('203.0.113.1').expect(429);
+    await attemptFrom('203.0.113.2').expect(401);
   });
 });

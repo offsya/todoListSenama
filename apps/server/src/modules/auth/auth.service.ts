@@ -25,7 +25,7 @@ export async function register({ email, password }: RegisterInput): Promise<Auth
 export async function login({ email, password }: LoginInput): Promise<AuthResponse> {
   const user = await UserModel.findOne({ email }).select('+passwordHash');
 
-  // Always run bcrypt, even for unknown emails, so timing does not reveal which emails exist.
+  // Always compute a hash, even for unknown emails, so timing does not reveal which emails exist.
   const passwordMatches = await verifyPassword(
     password,
     user?.passwordHash ?? (await getDummyPasswordHash()),

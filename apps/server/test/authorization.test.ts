@@ -41,6 +41,12 @@ describe('authentication', () => {
       'Invalid token',
     ],
     [
+      // Valid signature with the real secret, but the server only accepts HS256.
+      'a token signed with another algorithm',
+      `Bearer ${jwt.sign({}, env.JWT_SECRET, { subject: missingId, algorithm: 'HS512' })}`,
+      'Invalid token',
+    ],
+    [
       'an unsigned token (alg: none)',
       `Bearer ${base64url({ alg: 'none', typ: 'JWT' })}.${base64url({ sub: missingId })}.`,
       'Invalid token',

@@ -11,14 +11,19 @@ import { todosRouter } from './modules/todos/todos.router.js';
 export interface AppOptions {
   /** Max login/registration attempts per IP within 15 minutes. */
   authRateLimit: number;
+  /** Number of trusted reverse proxies in front of the API. */
+  trustProxy: number;
 }
 
 /** Builds the Express application. Kept separate from `index.ts` so tests can run it without a port. */
 export function createApp({
   authRateLimit = env.AUTH_RATE_LIMIT_MAX,
+  trustProxy = env.TRUST_PROXY,
 }: Partial<AppOptions> = {}): Express {
   const app = express();
-  app.set('trust proxy', env.TRUST_PROXY);
+  // Leave the setting untouched without a proxy: express-rate-limit then warns about
+  // unexpected X-Forwarded-For headers, which reveals a missing TRUST_PROXY in production.
+  if (trustProxy > 0) app.set('trust proxy', trustProxy);
 
   app.use(httpLogger);
   app.use(helmet());

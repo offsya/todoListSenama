@@ -1,5 +1,6 @@
 import type { ApiErrorBody } from '@todo/shared';
 import type { ErrorRequestHandler, RequestHandler } from 'express';
+import { STATUS_CODES } from 'node:http';
 import { ZodError } from 'zod';
 import { HttpError } from '../lib/http-error.js';
 import { logger } from '../lib/logger.js';
@@ -39,29 +40,28 @@ function toHttpError(err: unknown): HttpError {
     return new HttpError(400, 'VALIDATION_ERROR', 'Validation failed', details);
   }
 
-  if (isBodyParserError(err)) {
-    if (err.type === 'entity.too.large') {
-      return new HttpError(413, 'PAYLOAD_TOO_LARGE', 'Request body is too large');
-    }
-    if (err.type === 'entity.parse.failed') {
+  // Express and body-parser report bad requests (malformed JSON, broken gzip, an invalid
+  // percent-encoding in the URL, an unsupported encoding...) as errors with a 4xx status.
+  const status = getClientErrorStatus(err);
+  if (status !== undefined) {
+    if (status === 413) return new HttpError(413, 'PAYLOAD_TOO_LARGE', 'Request body is too large');
+    if (hasType(err, 'entity.parse.failed')) {
       return HttpError.badRequest('Request body is not valid JSON');
     }
-    return HttpError.badRequest(err.message);
+    // Generic text: the original messages can echo raw request data.
+    return new HttpError(status, 'BAD_REQUEST', STATUS_CODES[status] ?? 'Bad Request');
   }
 
   // Anything else is a bug: hide the details from the client, they are in the logs.
   return new HttpError(500, 'INTERNAL_ERROR', 'Internal server error');
 }
 
-/** Errors thrown by `express.json()` (body-parser) carry a `type` and a 4xx `status`. */
-function isBodyParserError(err: unknown): err is Error & { type: string; status: number } {
-  return (
-    err instanceof Error &&
-    'type' in err &&
-    typeof err.type === 'string' &&
-    'status' in err &&
-    typeof err.status === 'number' &&
-    err.status >= 400 &&
-    err.status < 500
-  );
+function getClientErrorStatus(err: unknown): number | undefined {
+  if (typeof err !== 'object' || err === null) return undefined;
+  const status = 'status' in err ? err.status : 'statusCode' in err ? err.statusCode : undefined;
+  return typeof status === 'number' && status >= 400 && status < 500 ? status : undefined;
+}
+
+function hasType(err: unknown, type: string): boolean {
+  return typeof err === 'object' && err !== null && 'type' in err && err.type === type;
 }

@@ -12,15 +12,16 @@ describe('registerSchema', () => {
   });
 
   it.each([
-    ['missing', undefined],
-    ['empty', ''],
-    ['without domain', 'john@'],
-    ['not a string', 42],
-  ])('rejects an email that is %s', (_, email) => {
+    ['missing', undefined, 'Email is required'],
+    ['empty', '', 'Email is required'],
+    ['blank', '   ', 'Email is required'],
+    ['without domain', 'john@', 'Invalid email address'],
+    ['not a string', 42, 'Email is required'],
+  ])('rejects an email that is %s', (_, email, message) => {
     const result = registerSchema.safeParse({ email, password: 'secret123' });
 
     expect(result.success).toBe(false);
-    expect(result.error?.issues[0]?.path).toEqual(['email']);
+    expect(result.error?.issues).toEqual([expect.objectContaining({ path: ['email'], message })]);
   });
 
   it('rejects a password shorter than 8 characters', () => {
@@ -30,7 +31,7 @@ describe('registerSchema', () => {
     expect(result.error?.issues[0]?.message).toBe('Password must be at least 8 characters');
   });
 
-  it('rejects a password longer than bcrypt can handle', () => {
+  it('rejects an unreasonably long password', () => {
     const result = registerSchema.safeParse({
       email: 'john@example.com',
       password: 'a'.repeat(PASSWORD_MAX_LENGTH + 1),

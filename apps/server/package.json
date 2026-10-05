@@ -10,13 +10,14 @@
     "build": "tsc -p tsconfig.build.json",
     "start": "node --env-file-if-exists=.env dist/index.js",
     "db:memory": "tsx scripts/memory-db.ts",
+    "pretypecheck": "npm run build -w @todo/shared",
     "typecheck": "tsc --noEmit",
+    "pretest": "npm run build -w @todo/shared",
     "test": "vitest run",
     "test:watch": "vitest"
   },
   "dependencies": {
     "@todo/shared": "*",
-    "bcryptjs": "^3.0.3",
     "cors": "^2.8.6",
     "express": "^5.2.1",
     "express-rate-limit": "^8.7.0",
