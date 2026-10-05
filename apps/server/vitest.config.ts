@@ -8,6 +8,11 @@ export default defineConfig({
     env: {
       NODE_ENV: 'test',
       LOG_LEVEL: 'silent',
+      JWT_SECRET: 'test-secret-that-is-at-least-32-characters-long',
+      // The minimum cost keeps hashing fast; production uses the default of 10.
+      BCRYPT_ROUNDS: '4',
+      // Rate limiting has a dedicated test with its own app instance.
+      AUTH_RATE_LIMIT_MAX: '10000',
     },
     // The first run downloads the MongoDB binary, which can take a while.
     hookTimeout: 120_000,

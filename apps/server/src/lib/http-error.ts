@@ -18,7 +18,19 @@ export class HttpError extends Error {
     return new HttpError(400, 'BAD_REQUEST', message);
   }
 
+  static unauthorized(message: string): HttpError {
+    return new HttpError(401, 'UNAUTHORIZED', message);
+  }
+
   static notFound(message = 'Resource not found'): HttpError {
     return new HttpError(404, 'NOT_FOUND', message);
+  }
+
+  static conflict(message: string): HttpError {
+    return new HttpError(409, 'CONFLICT', message);
+  }
+
+  static tooManyRequests(message: string): HttpError {
+    return new HttpError(429, 'TOO_MANY_REQUESTS', message);
   }
 }

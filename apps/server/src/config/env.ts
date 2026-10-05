@@ -17,6 +17,18 @@ const envSchema = z.object({
         .filter(Boolean),
     ),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
+  JWT_SECRET: z
+    .string({ error: 'JWT_SECRET is required' })
+    .min(32, 'JWT_SECRET must be at least 32 characters long'),
+  JWT_EXPIRES_IN: z
+    .string()
+    .regex(/^\d+[smhd]$/, 'Use a duration like 15m, 12h or 7d')
+    .default('7d'),
+  BCRYPT_ROUNDS: z.coerce.number().int().min(4).max(15).default(10),
+  /** Max login/registration attempts per IP within the 15-minute window. */
+  AUTH_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(20),
+  /** Number of reverse proxies in front of the API, so rate limiting sees real client IPs. */
+  TRUST_PROXY: z.coerce.number().int().min(0).default(0),
 });
 
 export type Env = z.infer<typeof envSchema>;

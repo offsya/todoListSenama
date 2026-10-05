@@ -14,6 +14,9 @@ export const errorHandler: ErrorRequestHandler = (err: unknown, req, res, _next)
   if (error.status >= 500) {
     logger.error({ err, method: req.method, url: req.originalUrl }, 'Unhandled error');
   }
+  if (error.status === 401) {
+    res.set('WWW-Authenticate', 'Bearer');
+  }
 
   const body: ApiErrorBody = {
     error: {
