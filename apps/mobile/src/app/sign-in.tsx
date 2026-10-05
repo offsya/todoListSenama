@@ -14,9 +14,14 @@ export default function SignInScreen() {
   const styles = useStyles();
   // No navigation here: the protected routes in the root layout react to the new session.
   const signIn = useSignIn();
-  const { control, handleSubmit } = useForm({
+  const { control, handleSubmit, setFocus } = useForm({
     resolver: zodResolver(loginSchema),
     defaultValues: { email: '', password: '' },
+  });
+
+  const submit = handleSubmit((values) => {
+    // The keyboard's return key stays active while the request is in flight.
+    if (!signIn.isPending) signIn.mutate(values);
   });
 
   return (
@@ -41,6 +46,8 @@ export default function SignInScreen() {
         autoComplete="email"
         textContentType="emailAddress"
         returnKeyType="next"
+        submitBehavior="submit"
+        onSubmitEditing={() => setFocus('password')}
       />
       <FormTextField
         control={control}
@@ -50,14 +57,10 @@ export default function SignInScreen() {
         autoComplete="current-password"
         textContentType="password"
         returnKeyType="go"
-        onSubmitEditing={handleSubmit((values) => signIn.mutate(values))}
+        onSubmitEditing={submit}
       />
-      {signIn.isError && <ErrorMessage>{getErrorMessage(signIn.error)}</ErrorMessage>}
-      <Button
-        title="Sign in"
-        loading={signIn.isPending}
-        onPress={handleSubmit((values) => signIn.mutate(values))}
-      />
+      {signIn.isError && <ErrorMessage message={getErrorMessage(signIn.error)} />}
+      <Button title="Sign in" loading={signIn.isPending} onPress={submit} />
     </AuthScreen>
   );
 }
@@ -68,7 +71,7 @@ const useStyles = makeStyles((colors) => ({
     fontSize: 15,
   },
   link: {
-    color: colors.primary,
+    color: colors.primaryText,
     fontWeight: '600',
   },
 }));

@@ -47,7 +47,8 @@ const useStyles = makeStyles((colors) => ({
   tab: {
     flex: 1,
     alignItems: 'center',
-    paddingVertical: 8,
+    justifyContent: 'center',
+    minHeight: 44,
     borderRadius: 6,
   },
   tabSelected: {
@@ -59,6 +60,6 @@ const useStyles = makeStyles((colors) => ({
     fontWeight: '600',
   },
   labelSelected: {
-    color: colors.primary,
+    color: colors.primaryText,
   },
 }));

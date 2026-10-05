@@ -22,22 +22,27 @@ const signUpFormSchema = registerSchema
 export default function SignUpScreen() {
   const styles = useStyles();
   const signUp = useSignUp();
-  const { control, handleSubmit } = useForm({
+  const { control, handleSubmit, setFocus } = useForm({
     resolver: zodResolver(signUpFormSchema),
     defaultValues: { email: '', password: '', confirmPassword: '' },
   });
 
-  // The API rejects unknown fields, so send only what it expects.
-  const submit = handleSubmit(({ email, password }) => signUp.mutate({ email, password }));
+  const submit = handleSubmit(({ email, password }) => {
+    // The API rejects unknown fields, so send only what it expects. The keyboard's return key
+    // stays active while the request is in flight.
+    if (!signUp.isPending) signUp.mutate({ email, password });
+  });
 
   return (
     <AuthScreen
       title="Create an account"
       subtitle="Your todos stay private to you."
+      hasHeader
       footer={
         <Text style={styles.footer}>
           Already have an account?{' '}
-          <Link href="/sign-in" replace style={styles.link}>
+          {/* Go back to the sign-in screen below instead of stacking another one. */}
+          <Link href="/sign-in" dismissTo style={styles.link}>
             Sign in
           </Link>
         </Text>
@@ -51,6 +56,9 @@ export default function SignUpScreen() {
         autoCapitalize="none"
         autoComplete="email"
         textContentType="emailAddress"
+        returnKeyType="next"
+        submitBehavior="submit"
+        onSubmitEditing={() => setFocus('password')}
       />
       <FormTextField
         control={control}
@@ -60,6 +68,9 @@ export default function SignUpScreen() {
         secureTextEntry
         autoComplete="new-password"
         textContentType="newPassword"
+        returnKeyType="next"
+        submitBehavior="submit"
+        onSubmitEditing={() => setFocus('confirmPassword')}
       />
       <FormTextField
         control={control}
@@ -71,7 +82,7 @@ export default function SignUpScreen() {
         returnKeyType="go"
         onSubmitEditing={submit}
       />
-      {signUp.isError && <ErrorMessage>{getErrorMessage(signUp.error)}</ErrorMessage>}
+      {signUp.isError && <ErrorMessage message={getErrorMessage(signUp.error)} />}
       <Button title="Create account" loading={signUp.isPending} onPress={submit} />
     </AuthScreen>
   );
@@ -83,7 +94,7 @@ const useStyles = makeStyles((colors) => ({
     fontSize: 15,
   },
   link: {
-    color: colors.primary,
+    color: colors.primaryText,
     fontWeight: '600',
   },
 }));
