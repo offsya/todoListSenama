@@ -12,6 +12,7 @@
     "node": ">=22.13"
   },
   "scripts": {
+    "postinstall": "npm run build -w @todo/shared",
     "dev": "concurrently -k -n shared,api,web -c gray,blue,magenta \"npm:dev:shared\" \"npm:dev:server\" \"npm:dev:web\"",
     "dev:shared": "npm run dev -w @todo/shared",
     "dev:server": "npm run dev -w @todo/server",
