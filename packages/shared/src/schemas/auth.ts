@@ -1,14 +1,15 @@
 import { z } from 'zod';
 
 export const PASSWORD_MIN_LENGTH = 8;
-// bcrypt ignores everything after the first 72 bytes, so longer passwords give a false sense of security.
-export const PASSWORD_MAX_LENGTH = 72;
+// Generous enough for passphrases and password managers; the whole value is hashed.
+export const PASSWORD_MAX_LENGTH = 128;
 export const EMAIL_MAX_LENGTH = 254;
 
 export const emailSchema = z
   .string({ error: 'Email is required' })
   .trim()
   .toLowerCase()
+  .min(1, 'Email is required')
   .max(EMAIL_MAX_LENGTH, `Email must be at most ${EMAIL_MAX_LENGTH} characters`)
   .pipe(z.email('Invalid email address'));
 

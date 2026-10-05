@@ -1,0 +1,73 @@
+### Manual API checks for the JetBrains HTTP Client (WebStorm/IDEA) or VS Code REST Client.
+### Start the API first: `npm run db:memory` and `npm run dev:server` from the repository root.
+### JetBrains: run "Register" or "Login" first, the token is saved for the requests below.
+### VS Code: paste the token from the login response into @token.
+
+@baseUrl = http://localhost:4000
+@token = paste-a-token-here-when-using-vs-code
+
+### Health
+GET {{baseUrl}}/health
+
+### Register
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{
+  "email": "demo@example.com",
+  "password": "password123"
+}
+
+> {% client.global.set("token", response.body.token); %}
+
+### Login
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "demo@example.com",
+  "password": "password123"
+}
+
+> {% client.global.set("token", response.body.token); %}
+
+### Current user
+GET {{baseUrl}}/auth/me
+Authorization: Bearer {{token}}
+
+### List todos (401 without a token)
+GET {{baseUrl}}/todos
+Authorization: Bearer {{token}}
+
+### Create a todo
+POST {{baseUrl}}/todos
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "text": "Write the README"
+}
+
+> {% client.global.set("todoId", response.body.id); %}
+
+### Update the text and/or the status
+PUT {{baseUrl}}/todos/{{todoId}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "completed": true
+}
+
+### Delete a todo
+DELETE {{baseUrl}}/todos/{{todoId}}
+Authorization: Bearer {{token}}
+
+### Invalid payload -> 400 with field details
+POST {{baseUrl}}/todos
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "text": ""
+}
