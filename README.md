@@ -101,6 +101,12 @@ docker compose down
 
 Чтобы запустить стек без исходников и без сборки, достаточно папки [`deploy/`](deploy): в ней `docker-compose.yml` с образами из Docker Hub, `.env.example` и короткая инструкция. Получатель копирует папку, создаёт `.env` и выполняет `docker compose up -d`.
 
+Сам compose-файл тоже опубликован на Docker Hub (тег `compose`), поэтому можно обойтись и без папки. Достаточно файла `.env` с `JWT_SECRET` в пустой папке и одной команды (Compose попросит подтвердить переменные):
+
+```bash
+docker compose -f oci://docker.io/offsya/todolistsenamasoft:compose up -d
+```
+
 Обновить образы на Docker Hub после изменений (нужен `docker login` с доступом к `offsya`):
 
 ```bash
@@ -118,6 +124,12 @@ docker save offsya/todolistsenamasoft:api offsya/todolistsenamasoft:web offsya/t
 ```
 
 Получатель загружает архив командой `docker load -i todolistsenamasoft-images.tar` и запускает стек из папки `deploy/`.
+
+После изменений в `deploy/docker-compose.yml` его нужно опубликовать заново. Compose проверяет обязательные переменные ещё при загрузке, поэтому `JWT_SECRET` нужно задать любым значением. В публикацию попадает только сам файл, без значений переменных:
+
+```bash
+cd deploy && JWT_SECRET=placeholder docker compose publish offsya/todolistsenamasoft:compose
+```
 
 ## Локальный запуск для разработки
 
