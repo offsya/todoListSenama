@@ -20,13 +20,14 @@ function memoryStorage(initial: Record<string, string> = {}) {
 
 /** Async storage whose reads resolve only when the test says so (like the mobile keychain). */
 function deferredStorage(value: string | null) {
-  let resolveRead: () => void = () => undefined;
+  let resolveRead: (value: string | null) => void = () => undefined;
+  const read = new Promise<string | null>((resolve) => (resolveRead = resolve));
   const storage: KeyValueStorage = {
-    getItem: () => new Promise((resolve) => (resolveRead = () => resolve(value))),
+    getItem: () => read,
     setItem: () => Promise.resolve(),
     removeItem: () => Promise.resolve(),
   };
-  return { storage, finishRead: () => resolveRead() };
+  return { storage, finishRead: () => resolveRead(value) };
 }
 
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -104,6 +105,32 @@ describe('createSessionStore', () => {
     await flush();
 
     expect(store.getState().session).toEqual(session);
+  });
+
+  it('reloads what was last written, even while the write is still in flight', async () => {
+    const data = new Map([[KEY, JSON.stringify(session)]]);
+    let finishRemove: () => void = () => undefined;
+    const store = createSessionStore({
+      getItem: (key) => Promise.resolve(data.get(key) ?? null),
+      setItem: (key, value) => void data.set(key, value),
+      // Like the keychain: the removal takes a while to land.
+      removeItem: (key) =>
+        new Promise<void>((resolve) => {
+          finishRemove = () => {
+            data.delete(key);
+            resolve();
+          };
+        }),
+    });
+    await flush();
+
+    store.set(null); // sign out
+    const reloading = store.reload(); // e.g. a storage event from another tab
+    await flush();
+    finishRemove();
+    await reloading;
+
+    expect(store.getState()).toEqual({ status: 'ready', session: null });
   });
 
   it('stops notifying after unsubscribe', () => {

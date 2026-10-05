@@ -1,20 +1,22 @@
-import type {
-  ApiErrorBody,
-  ApiErrorCode,
-  AuthResponse,
-  CreateTodoInput,
-  LoginInput,
-  RegisterInput,
-  Todo,
-  UpdateTodoInput,
-  User,
+import {
+  createTodoSchema,
+  loginSchema,
+  registerSchema,
+  updateTodoSchema,
+  type ApiErrorBody,
+  type ApiErrorCode,
+  type AuthResponse,
+  type Todo,
+  type User,
 } from '@todo/shared';
 import { http, HttpResponse } from 'msw/http';
 import { setupServer } from 'msw/node';
+import type { ZodError } from 'zod';
 
 /**
- * A small in-memory fake of the API for component tests. It mirrors the real contract
- * (status codes, error format, ownership, strict payloads) without a server or database.
+ * A small in-memory fake of the API for component tests. It follows the real contract: the
+ * same zod schemas validate payloads (unknown fields are rejected), errors have the API's shape,
+ * and every todo route checks the token and the owner.
  */
 
 export const API_URL = `${window.location.origin}/api`;
@@ -49,15 +51,26 @@ const tokenFor = (user: User) => `token-for-${user.id}`;
 export const apiError = (status: number, code: ApiErrorCode, message: string) =>
   HttpResponse.json<ApiErrorBody>({ error: { code, message } }, { status });
 
+const validationError = (error: ZodError) =>
+  HttpResponse.json<ApiErrorBody>(
+    {
+      error: {
+        code: 'VALIDATION_ERROR',
+        message: 'Validation failed',
+        details: error.issues.map((issue) => ({
+          path: issue.path.join('.'),
+          message: issue.message,
+        })),
+      },
+    },
+    { status: 400 },
+  );
+
 const unauthorized = () => apiError(401, 'UNAUTHORIZED', 'Invalid token');
 const notFound = () => apiError(404, 'NOT_FOUND', 'Todo not found');
 
 function toTodo({ ownerId: _ownerId, ...todo }: StoredTodo): Todo {
   return todo;
-}
-
-function hasOnlyKeys(body: object, allowed: string[]) {
-  return Object.keys(body).every((key) => allowed.includes(key));
 }
 
 function authenticate(request: Request): User | undefined {
@@ -94,31 +107,25 @@ export const apiRequests = () => [...db.requests];
 // ---- Handlers --------------------------------------------------------------------------
 
 const handlers = [
-  http.post<never, RegisterInput, AuthResponse | ApiErrorBody>(
-    `${API_URL}/auth/register`,
-    async ({ request }) => {
-      const body = await request.json();
-      if (!hasOnlyKeys(body, ['email', 'password'])) {
-        return apiError(400, 'VALIDATION_ERROR', 'Validation failed');
-      }
-      if (db.users.some(({ user }) => user.email === body.email)) {
-        return apiError(409, 'CONFLICT', 'Email is already registered');
-      }
-      return HttpResponse.json(seedUser(body.email, body.password), { status: 201 });
-    },
-  ),
+  http.post(`${API_URL}/auth/register`, async ({ request }) => {
+    const input = registerSchema.safeParse(await request.json());
+    if (!input.success) return validationError(input.error);
+    if (db.users.some(({ user }) => user.email === input.data.email)) {
+      return apiError(409, 'CONFLICT', 'Email is already registered');
+    }
+    return HttpResponse.json(seedUser(input.data.email, input.data.password), { status: 201 });
+  }),
 
-  http.post<never, LoginInput, AuthResponse | ApiErrorBody>(
-    `${API_URL}/auth/login`,
-    async ({ request }) => {
-      const { email, password } = await request.json();
-      const match = db.users.find(
-        (entry) => entry.user.email === email && entry.password === password,
-      );
-      if (!match) return apiError(401, 'UNAUTHORIZED', 'Invalid email or password');
-      return HttpResponse.json({ token: tokenFor(match.user), user: match.user });
-    },
-  ),
+  http.post(`${API_URL}/auth/login`, async ({ request }) => {
+    const input = loginSchema.safeParse(await request.json());
+    if (!input.success) return validationError(input.error);
+    const { email, password } = input.data;
+    const match = db.users.find(
+      (entry) => entry.user.email === email && entry.password === password,
+    );
+    if (!match) return apiError(401, 'UNAUTHORIZED', 'Invalid email or password');
+    return HttpResponse.json({ token: tokenFor(match.user), user: match.user });
+  }),
 
   http.get(`${API_URL}/todos`, ({ request }) => {
     const user = authenticate(request);
@@ -129,10 +136,11 @@ const handlers = [
   http.post(`${API_URL}/todos`, async ({ request }) => {
     const user = authenticate(request);
     if (!user) return unauthorized();
-    const { text } = (await request.json()) as CreateTodoInput;
+    const input = createTodoSchema.safeParse(await request.json());
+    if (!input.success) return validationError(input.error);
     const todo: StoredTodo = {
       id: nextId(),
-      text,
+      text: input.data.text,
       completed: false,
       createdAt: now(),
       updatedAt: now(),
@@ -147,7 +155,9 @@ const handlers = [
     if (!user) return unauthorized();
     const todo = db.todos.find((item) => item.id === params.id && item.ownerId === user.id);
     if (!todo) return notFound();
-    Object.assign(todo, (await request.json()) as UpdateTodoInput, { updatedAt: now() });
+    const input = updateTodoSchema.safeParse(await request.json());
+    if (!input.success) return validationError(input.error);
+    Object.assign(todo, input.data, { updatedAt: now() });
     return HttpResponse.json(toTodo(todo));
   }),
 
