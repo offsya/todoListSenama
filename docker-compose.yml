@@ -7,6 +7,7 @@
 #   http://localhost:4000   API (for the mobile app on a phone or emulator)
 #
 # Only MongoDB, for local development with `npm run dev`:  docker compose up -d mongo
+# (Compose reads the whole file, so .env is needed for that too.)
 #
 # Compose project and image names must be lowercase; containers keep the project's name.
 name: todolistsenamasoft
@@ -18,8 +19,10 @@ services:
     restart: unless-stopped
     volumes:
       - mongo-data:/data/db
+    # For `npm run dev` and database tools on this machine only: MongoDB runs without a password
+    # here, so it must not be reachable from the network. The API connects over Compose's network.
     ports:
-      - '27017:27017'
+      - '127.0.0.1:27017:27017'
     healthcheck:
       test: ['CMD', 'mongosh', '--quiet', '--eval', "db.adminCommand('ping').ok"]
       interval: 10s
@@ -39,10 +42,11 @@ services:
       MONGODB_URI: mongodb://mongo:27017/todo-app
       JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env (see .env.example)}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
-      # nginx in front of the API sets X-Forwarded-For; rate limiting must see client IPs.
+      # Every request comes through nginx, which sets X-Forwarded-For; rate limiting must see
+      # client IPs.
       TRUST_PROXY: 1
-    ports:
-      - '4000:4000'
+    # No published port: with TRUST_PROXY, a client talking to the API directly could choose its
+    # own IP for the rate limiter. The web service publishes the API on port 4000 instead.
     depends_on:
       mongo:
         condition: service_healthy
@@ -56,6 +60,8 @@ services:
     restart: unless-stopped
     ports:
       - '8080:80'
+      # The API behind nginx (docker/nginx/api-gateway.conf).
+      - '4000:4000'
     depends_on:
       api:
         condition: service_healthy

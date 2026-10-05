@@ -4,11 +4,16 @@ import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo, type ReactNode } from 'react';
+import { z } from 'zod';
 import { api } from '../lib/api';
 import { useRefetchOnAppFocus } from '../lib/app-state';
 import { queryClient } from '../lib/query-client';
 import { sessionStore } from '../lib/session';
 import { useColors, useIsDarkMode } from '../theme';
+
+// zod compiles validators with `new Function` when it can. The Content-Security-Policy of the
+// Docker web build forbids that, and zod's probe would log a violation on the first validation.
+z.config({ jitless: true });
 
 // Keep the splash screen up until the stored session has been read from the keychain.
 void SplashScreen.preventAutoHideAsync();

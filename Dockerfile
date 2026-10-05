@@ -2,7 +2,8 @@
 #
 # One Dockerfile for the whole monorepo; docker-compose.yml picks a target per service:
 #   api         Node.js API (production dependencies only, runs as a non-root user)
-#   web         React web app served by nginx, which also proxies /api to the API
+#   web         React web app served by nginx, which also proxies /api to the API and
+#               publishes the API on port 4000
 #   mobile-web  Web build of the Expo app, served the same way
 
 ARG NODE_IMAGE=node:24-alpine
@@ -36,7 +37,10 @@ COPY apps/server apps/server
 RUN npm run build -w @todo/server
 
 FROM manifests AS api-deps
-RUN npm ci --omit=dev --ignore-scripts --no-audit --no-fund --workspace @todo/server \
+# --omit=optional as well: --omit=dev keeps packages that the lock file also lists as optional
+# dependencies of the apps' tooling (TypeScript, lightningcss binaries): 71 MB instead of 38 MB.
+RUN npm ci --omit=dev --omit=optional --ignore-scripts --no-audit --no-fund \
+    --workspace @todo/server \
   && mkdir -p apps/server/node_modules
 
 FROM ${NODE_IMAGE} AS api
@@ -54,14 +58,22 @@ HEALTHCHECK --interval=10s --timeout=3s --start-period=15s --retries=5 \
   CMD node -e "fetch('http://127.0.0.1:4000/health').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"
 CMD ["node", "apps/server/dist/index.js"]
 
+# ---- nginx for the single-page apps --------------------------------------------------------
+FROM ${NGINX_IMAGE} AS spa
+COPY docker/nginx/spa.conf /etc/nginx/conf.d/default.conf
+HEALTHCHECK --interval=10s --timeout=3s --start-period=5s --retries=3 \
+  CMD wget -q -O /dev/null http://127.0.0.1/ || exit 1
+
 # ---- Web -----------------------------------------------------------------------------------
 FROM packages AS web-build
 COPY apps/web apps/web
 RUN npm run build -w @todo/web
 
-FROM ${NGINX_IMAGE} AS web
-COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
+FROM spa AS web
+COPY docker/nginx/csp-web.conf /etc/nginx/csp.conf
+COPY docker/nginx/api-gateway.conf /etc/nginx/conf.d/api-gateway.conf
 COPY --from=web-build /app/apps/web/dist /usr/share/nginx/html
+EXPOSE 4000
 
 # ---- Mobile app, web build -----------------------------------------------------------------
 FROM packages AS mobile-web-build
@@ -70,6 +82,6 @@ COPY apps/mobile apps/mobile
 ENV EXPO_PUBLIC_API_URL=/api CI=1
 RUN cd apps/mobile && npx expo export --platform web --output-dir dist-web
 
-FROM ${NGINX_IMAGE} AS mobile-web
-COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
+FROM spa AS mobile-web
+COPY docker/nginx/csp-mobile-web.conf /etc/nginx/csp.conf
 COPY --from=mobile-web-build /app/apps/mobile/dist-web /usr/share/nginx/html

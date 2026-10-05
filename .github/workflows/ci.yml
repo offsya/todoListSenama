@@ -20,7 +20,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # The minimum supported version (package.json engines) and the current LTS.
+        # The oldest supported release line (package.json engines) and the current LTS.
         node: [22, 24]
     env:
       # Keep the MongoDB binary used by the API tests outside node_modules, so it can be cached.
@@ -59,3 +59,33 @@ jobs:
       # API and web production builds, plus the Android JS bundle of the mobile app.
       - name: Build
         run: npm run build
+
+  docker:
+    name: Docker stack
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+
+      - name: Create .env
+        run: echo "JWT_SECRET=$(openssl rand -hex 32)" > .env
+
+      # --wait returns once every container reports healthy.
+      - name: Build and start the stack
+        run: docker compose up -d --build --wait --wait-timeout 300
+
+      - name: Smoke test
+        run: npm run smoke
+
+      - name: Container logs
+        if: failure()
+        run: docker compose logs
+
+      - name: Stop the stack
+        if: always()
+        run: docker compose down -v
