@@ -12,6 +12,16 @@ describe('resolveApiUrl', () => {
     ).toBe('https://api.example.com');
   });
 
+  it('accepts a path on the same origin (web build behind a proxy)', () => {
+    expect(resolveApiUrl({ envUrl: '/api', platform: 'web', isDev: false })).toBe('/api');
+  });
+
+  it('rejects a value that is neither a URL nor a path', () => {
+    expect(() =>
+      resolveApiUrl({ envUrl: 'C:/Program Files/Git/api', platform: 'web', isDev: false }),
+    ).toThrow('EXPO_PUBLIC_API_URL must be an http(s) URL or a path');
+  });
+
   it('uses the computer running the dev server on a device', () => {
     expect(
       resolveApiUrl({ platform: 'android', isDev: true, devServerHostUri: '192.168.1.10:8081' }),

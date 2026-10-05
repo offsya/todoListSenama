@@ -1,0 +1,18 @@
+# Keep the build context small and never ship local secrets or caches into images.
+**/node_modules
+**/dist
+**/dist-web
+**/coverage
+**/.expo
+**/*.tsbuildinfo
+**/.env
+**/.env.*
+!**/.env.example
+apps/server/.mongo-data
+apps/mobile/android
+apps/mobile/ios
+.git
+.github
+.idea
+.vscode
+*.log

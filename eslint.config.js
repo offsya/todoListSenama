@@ -55,9 +55,14 @@ export default defineConfig([
     },
   },
 
-  // Node.js code: API server, shared package and tooling configs.
+  // Node.js code: API server, shared package, scripts and tooling configs.
   {
-    files: ['apps/server/**/*.ts', 'packages/shared/**/*.ts', '**/*.config.{js,cjs,mjs,ts}'],
+    files: [
+      'apps/server/**/*.ts',
+      'packages/shared/**/*.ts',
+      'scripts/**/*.mjs',
+      '**/*.config.{js,cjs,mjs,ts}',
+    ],
     languageOptions: { globals: globals.node },
   },
   {

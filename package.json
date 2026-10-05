@@ -10,7 +10,7 @@
     "apps/*"
   ],
   "engines": {
-    "node": ">=22.13"
+    "node": "^22.22.2 || ^24.15.0 || >=26"
   },
   "scripts": {
     "postinstall": "npm run build:packages",
@@ -21,10 +21,11 @@
     "dev:mobile": "npm run start -w @todo/mobile",
     "db:memory": "npm run db:memory -w @todo/server",
     "build": "npm run build --workspaces --if-present",
+    "smoke": "node --test --test-reporter=spec scripts/smoke-test.mjs",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
     "prelint": "npm run build:packages",
-    "lint": "eslint eslint.config.js && npm run lint --workspaces --if-present",
+    "lint": "eslint eslint.config.js scripts && npm run lint --workspaces --if-present",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },
