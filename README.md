@@ -84,7 +84,7 @@ docker compose up -d --build
 npm run smoke
 ```
 
-Контейнеры называются `todoListSenamaSoft-mongo`, `-api`, `-web` и `-mobile-web`; имя проекта Compose и образов — `todolistsenamasoft` (Compose требует нижний регистр).
+Контейнеры называются `todoListSenamaSoft-mongo`, `-api`, `-web` и `-mobile-web`, проект Compose — `todolistsenamasoft` (Compose требует нижний регистр). Образы — `offsya/todolistsenamasoft:api`, `:web` и `:mobile-web`, они опубликованы на [Docker Hub](https://hub.docker.com/r/offsya/todolistsenamasoft) (см. [ниже](#готовые-образы)).
 
 - Веб и мобильная веб-сборка обращаются к API через встроенный nginx по тому же адресу (`/api`), поэтому CORS не нужен.
 - Наружу опубликован только nginx. Сам контейнер API закрыт: лимиты попыток входа доверяют заголовку `X-Forwarded-For` только от nginx, и прямой доступ позволил бы их обойти. Порт 4000 тоже обслуживает nginx.
@@ -96,6 +96,28 @@ npm run smoke
 ```bash
 docker compose down
 ```
+
+### Готовые образы
+
+Чтобы запустить стек без исходников и без сборки, достаточно папки [`deploy/`](deploy): в ней `docker-compose.yml` с образами из Docker Hub, `.env.example` и короткая инструкция. Получатель копирует папку, создаёт `.env` и выполняет `docker compose up -d`.
+
+Обновить образы на Docker Hub после изменений (нужен `docker login` с доступом к `offsya`):
+
+```bash
+docker compose build
+```
+
+```bash
+docker compose push
+```
+
+Передать образы одним файлом, без Docker Hub. Образ `mongo:8` официальный и скачается у получателя сам:
+
+```bash
+docker save offsya/todolistsenamasoft:api offsya/todolistsenamasoft:web offsya/todolistsenamasoft:mobile-web -o todolistsenamasoft-images.tar
+```
+
+Получатель загружает архив командой `docker load -i todolistsenamasoft-images.tar` и запускает стек из папки `deploy/`.
 
 ## Локальный запуск для разработки
 
