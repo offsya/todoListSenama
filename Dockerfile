@@ -11,7 +11,9 @@
 ARG NODE_IMAGE=node:24-alpine
 ARG NGINX_IMAGE=nginx:1.29-alpine
 ARG MONGO_IMAGE=mongo:8
-# The all-in-one image is based on Ubuntu (MongoDB's image) and needs a glibc build of Node.js.
+# The all-in-one image: plain Ubuntu (the base of MongoDB's image, whose mongod it takes) and a
+# glibc build of Node.js.
+ARG UBUNTU_IMAGE=ubuntu:24.04
 ARG NODE_GLIBC_IMAGE=node:24-bookworm-slim
 
 # ---- Dependencies (cached until a manifest or the lock file changes) ----------------------
@@ -100,11 +102,18 @@ COPY --from=mobile-web-build /app/apps/mobile/dist-web /usr/share/nginx/html
 # nginx side by side under tini (docker/all-in-one/start.sh). One process per container, as in
 # docker-compose.yml, stays the regular setup; this image exists for a no-terminal start.
 FROM ${NODE_GLIBC_IMAGE} AS node-glibc
+FROM ${MONGO_IMAGE} AS mongo
 
-FROM ${MONGO_IMAGE} AS all-in-one
+# Plain Ubuntu rather than the MongoDB image: that one also ships mongosh, mongos and the
+# database tools (1.4 GB instead of about 450 MB) and declares port 27017, which Docker Desktop
+# would offer to publish next to the app's ports.
+FROM ${UBUNTU_IMAGE} AS all-in-one
+# libcurl brings everything else mongod links against (OpenSSL, Kerberos, LDAP, ...).
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends nginx tini \
-  && rm -rf /var/lib/apt/lists/* /etc/nginx/sites-enabled /etc/nginx/conf.d
+  && apt-get install -y --no-install-recommends nginx tini libcurl4t64 \
+  && rm -rf /var/lib/apt/lists/* /etc/nginx/sites-enabled /etc/nginx/conf.d \
+  && useradd --system --uid 10001 --no-create-home --shell /usr/sbin/nologin todo
+COPY --from=mongo /usr/bin/mongod /usr/bin/mongod
 COPY --from=node-glibc /usr/local/bin/node /usr/local/bin/node
 WORKDIR /app
 # The API's dependencies are plain JavaScript (no native addons), so the Alpine install works.
@@ -120,12 +129,13 @@ COPY docker/all-in-one/nginx.conf /etc/nginx/nginx.conf
 COPY docker/nginx/csp-web.conf docker/nginx/csp-mobile-web.conf /etc/nginx/
 COPY --chmod=755 docker/api-entrypoint.sh /usr/local/bin/api-entrypoint
 COPY --chmod=755 docker/all-in-one/start.sh /usr/local/bin/start-todo
-# Data lives in volumes: /data/db (declared by the MongoDB image) and the JWT secret here.
-RUN mkdir -p /var/lib/todo-api && chown mongodb:mongodb /var/lib/todo-api
-VOLUME /var/lib/todo-api
-USER mongodb
+# Data lives in volumes: the database and the generated JWT secret.
+RUN mkdir -p /data/db /var/lib/todo-api && chown todo:todo /data/db /var/lib/todo-api
+VOLUME ["/data/db", "/var/lib/todo-api"]
+USER todo
 # 8080 web app, 8082 mobile app (web build), 4000 API for the mobile app on a phone.
 EXPOSE 8080 8082 4000
-HEALTHCHECK --interval=10s --timeout=3s --start-period=30s --retries=5 \
+# Checked every 2 s while starting, so Docker Desktop shows "healthy" as soon as the app is up.
+HEALTHCHECK --interval=10s --timeout=3s --start-period=60s --start-interval=2s --retries=3 \
   CMD node -e "fetch('http://127.0.0.1:8080/api/health').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"
 ENTRYPOINT ["tini", "--", "start-todo"]
