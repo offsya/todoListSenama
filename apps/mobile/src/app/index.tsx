@@ -21,8 +21,11 @@ export default function TodosScreen() {
   const styles = useStyles();
   const colors = useColors();
   const todos = useTodos();
-  const updateTodo = useUpdateTodo();
-  const deleteTodo = useDeleteTodo();
+  // Edits are optimistic: a failed one is rolled back and reported here, because the item
+  // itself may already be filtered out of view.
+  const [actionError, setActionError] = useState<unknown>(null);
+  const updateTodo = useUpdateTodo({ onError: setActionError });
+  const deleteTodo = useDeleteTodo({ onError: setActionError });
   const signOut = useSignOut();
   const [filter, setFilter] = useState<TodoFilter>('all');
 
@@ -41,19 +44,16 @@ export default function TodosScreen() {
   const activeFilter = getTodoFilter(filter);
   const items = todos.data ?? [];
   const visible = items.filter(activeFilter.matches);
-  // Edits are optimistic, so failures are reported here: the item itself may be filtered out.
-  const actionError = updateTodo.error ?? deleteTodo.error;
+  const retryButton = <TextButton title="Retry" onPress={() => void todos.refetch()} />;
 
   const renderEmpty = () => {
     if (todos.isPending) {
       return <ActivityIndicator style={styles.state} color={colors.primary} />;
     }
-    if (todos.isError) {
+    if (!todos.data) {
       return (
         <View style={styles.state}>
-          <ErrorMessage action={<TextButton title="Retry" onPress={() => void todos.refetch()} />}>
-            {getErrorMessage(todos.error)}
-          </ErrorMessage>
+          <ErrorMessage action={retryButton}>{getErrorMessage(todos.error)}</ErrorMessage>
         </View>
       );
     }
@@ -78,22 +78,20 @@ export default function TodosScreen() {
         ListHeaderComponent={
           <View style={styles.header}>
             <NewTodoForm />
-            {actionError && (
+            {actionError !== null && (
               <ErrorMessage
-                action={
-                  <TextButton
-                    title="Dismiss"
-                    onPress={() => {
-                      updateTodo.reset();
-                      deleteTodo.reset();
-                    }}
-                  />
-                }
+                action={<TextButton title="Dismiss" onPress={() => setActionError(null)} />}
               >
                 {getErrorMessage(actionError)}
               </ErrorMessage>
             )}
-            {todos.isSuccess && <FilterTabs todos={items} value={filter} onChange={setFilter} />}
+            {/* Loaded todos stay on screen when a background refresh fails. */}
+            {todos.data && todos.isError && (
+              <ErrorMessage action={retryButton}>
+                Could not refresh the list: {getErrorMessage(todos.error)}
+              </ErrorMessage>
+            )}
+            {todos.data && <FilterTabs todos={items} value={filter} onChange={setFilter} />}
           </View>
         }
         ListEmptyComponent={renderEmpty()}
