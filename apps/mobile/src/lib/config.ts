@@ -33,7 +33,16 @@ export function resolveApiUrl({
   devServerHostUri,
   webHostname,
 }: ApiUrlSources): string {
-  if (envUrl) return envUrl;
+  if (envUrl) {
+    // Catch typos and shell rewrites (Git Bash turns "/api" into "C:/Program Files/Git/api")
+    // here, instead of as a puzzling network error on the first request.
+    if (!/^(https?:\/\/|\/)/.test(envUrl)) {
+      throw new Error(
+        `EXPO_PUBLIC_API_URL must be an http(s) URL or a path starting with "/", got "${envUrl}".`,
+      );
+    }
+    return envUrl;
+  }
 
   if (!isDev) {
     // A release build has no dev server to guess from; quietly using localhost would make every
