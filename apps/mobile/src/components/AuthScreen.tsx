@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import type { ReactNode } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, Text, View } from 'react-native';
+import { ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { makeStyles, radius, useColors } from '../theme';
 
@@ -9,38 +9,41 @@ interface AuthScreenProps {
   subtitle: string;
   children: ReactNode;
   footer: ReactNode;
+  /** The screen shows a native header, which already covers the top safe area. */
+  hasHeader?: boolean;
 }
 
 /** Shared layout of the sign-in and sign-up screens. */
-export function AuthScreen({ title, subtitle, children, footer }: AuthScreenProps) {
+export function AuthScreen({ title, subtitle, children, footer, hasHeader }: AuthScreenProps) {
   const styles = useStyles();
   const colors = useColors();
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    <SafeAreaView style={styles.safeArea} edges={hasHeader ? ['bottom'] : ['top', 'bottom']}>
+      {/* iOS: the scroll view insets its content above the keyboard, which also accounts for a
+          native header (KeyboardAvoidingView does not). Android resizes the window itself. */}
+      <ScrollView
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets
       >
-        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-          <View style={styles.brand}>
-            <View style={styles.logo}>
-              <Ionicons name="checkmark" size={18} color={colors.onPrimary} />
-            </View>
-            <Text style={styles.brandName}>Todo</Text>
+        <View style={styles.brand}>
+          <View style={styles.logo}>
+            <Ionicons name="checkmark" size={18} color={colors.onPrimary} />
           </View>
+          <Text style={styles.brandName}>Todo</Text>
+        </View>
 
-          <View style={styles.card}>
-            <Text style={styles.title} role="heading">
-              {title}
-            </Text>
-            <Text style={styles.subtitle}>{subtitle}</Text>
-            <View style={styles.form}>{children}</View>
-          </View>
+        <View style={styles.card}>
+          <Text style={styles.title} role="heading">
+            {title}
+          </Text>
+          <Text style={styles.subtitle}>{subtitle}</Text>
+          <View style={styles.form}>{children}</View>
+        </View>
 
-          <View style={styles.footer}>{footer}</View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+        <View style={styles.footer}>{footer}</View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -49,9 +52,6 @@ const useStyles = makeStyles((colors) => ({
   safeArea: {
     flex: 1,
     backgroundColor: colors.background,
-  },
-  flex: {
-    flex: 1,
   },
   content: {
     flexGrow: 1,

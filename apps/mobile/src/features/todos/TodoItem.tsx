@@ -35,7 +35,8 @@ export const TodoItem = memo(function TodoItem({
         aria-checked={todo.completed}
         aria-label={todo.text}
         onPress={() => onToggle(todo)}
-        hitSlop={10}
+        // 22pt box + 2×12pt = a 46pt touch target (guideline: 44pt / 48dp).
+        hitSlop={12}
         style={[styles.checkbox, todo.completed && styles.checkboxChecked]}
       >
         {todo.completed && <Ionicons name="checkmark" size={15} color={colors.onPrimary} />}
@@ -90,6 +91,7 @@ function TodoTextEditor(props: TodoTextEditorProps) {
         returnKeyType="done"
         maxLength={TODO_TEXT_MAX_LENGTH}
         aria-label="Edit todo"
+        accessibilityHint={editor.error}
         autoFocus
         style={[styles.input, editor.error ? styles.inputInvalid : null]}
       />
@@ -115,7 +117,7 @@ const useStyles = makeStyles((colors) => ({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    borderColor: colors.border,
+    borderColor: colors.borderStrong,
     borderRadius: 6,
   },
   checkboxChecked: {

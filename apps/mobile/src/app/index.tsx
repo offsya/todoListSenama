@@ -28,6 +28,16 @@ export default function TodosScreen() {
   const deleteTodo = useDeleteTodo({ onError: setActionError });
   const signOut = useSignOut();
   const [filter, setFilter] = useState<TodoFilter>('all');
+  // Only a pull shows the refresh spinner, not the resync after every edit or on app focus.
+  const [isRefreshingByUser, setIsRefreshingByUser] = useState(false);
+  const refreshByUser = async () => {
+    setIsRefreshingByUser(true);
+    try {
+      await todos.refetch();
+    } finally {
+      setIsRefreshingByUser(false);
+    }
+  };
 
   const { mutate: update } = updateTodo;
   const { mutate: remove } = deleteTodo;
@@ -53,7 +63,7 @@ export default function TodosScreen() {
     if (!todos.data) {
       return (
         <View style={styles.state}>
-          <ErrorMessage action={retryButton}>{getErrorMessage(todos.error)}</ErrorMessage>
+          <ErrorMessage message={getErrorMessage(todos.error)} action={retryButton} />
         </View>
       );
     }
@@ -80,16 +90,16 @@ export default function TodosScreen() {
             <NewTodoForm />
             {actionError !== null && (
               <ErrorMessage
+                message={getErrorMessage(actionError)}
                 action={<TextButton title="Dismiss" onPress={() => setActionError(null)} />}
-              >
-                {getErrorMessage(actionError)}
-              </ErrorMessage>
+              />
             )}
             {/* Loaded todos stay on screen when a background refresh fails. */}
             {todos.data && todos.isError && (
-              <ErrorMessage action={retryButton}>
-                Could not refresh the list: {getErrorMessage(todos.error)}
-              </ErrorMessage>
+              <ErrorMessage
+                message={`Could not refresh the list: ${getErrorMessage(todos.error)}`}
+                action={retryButton}
+              />
             )}
             {todos.data && <FilterTabs todos={items} value={filter} onChange={setFilter} />}
           </View>
@@ -98,10 +108,12 @@ export default function TodosScreen() {
         ItemSeparatorComponent={Separator}
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
+        // iOS: keep the field being edited above the keyboard. Android resizes the window.
+        automaticallyAdjustKeyboardInsets
         refreshControl={
           <RefreshControl
-            refreshing={todos.isRefetching}
-            onRefresh={() => void todos.refetch()}
+            refreshing={isRefreshingByUser}
+            onRefresh={() => void refreshByUser()}
             tintColor={colors.primary}
             colors={[colors.primary]}
           />
@@ -119,7 +131,7 @@ function Separator() {
 function TextButton({ title, onPress }: { title: string; onPress: () => void }) {
   const styles = useStyles();
   return (
-    <Pressable role="button" onPress={onPress} hitSlop={8}>
+    <Pressable role="button" onPress={onPress} hitSlop={12} style={styles.textButtonArea}>
       <Text style={styles.textButton}>{title}</Text>
     </Pressable>
   );
@@ -146,6 +158,9 @@ const useStyles = makeStyles((colors) => ({
     color: colors.textMuted,
     fontSize: 15,
     textAlign: 'center',
+  },
+  textButtonArea: {
+    paddingVertical: 4,
   },
   textButton: {
     color: colors.danger,

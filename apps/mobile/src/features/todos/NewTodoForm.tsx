@@ -20,6 +20,8 @@ export function NewTodoForm() {
   } = useController({ control, name: 'text' });
 
   const submit = handleSubmit(({ text }) => {
+    // The keyboard's return key stays active while the request is in flight: no duplicates.
+    if (createTodo.isPending) return;
     createTodo.mutate(text, { onSuccess: () => reset() });
   });
 
@@ -40,6 +42,7 @@ export function NewTodoForm() {
           placeholder="What needs to be done?"
           placeholderTextColor={colors.textMuted}
           aria-label="New todo"
+          accessibilityHint={error}
           returnKeyType="done"
           maxLength={TODO_TEXT_MAX_LENGTH}
           style={[styles.input, error ? styles.inputInvalid : null]}
@@ -78,7 +81,7 @@ const useStyles = makeStyles((colors) => ({
     minHeight: 48,
     paddingHorizontal: 16,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.borderStrong,
     borderRadius: radius.md,
     backgroundColor: colors.surface,
     color: colors.text,

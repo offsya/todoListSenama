@@ -19,6 +19,9 @@ export function TextField({ label, error, style, onFocus, onBlur, ...props }: Te
       <Text style={styles.label}>{label}</Text>
       <TextInput
         aria-label={label}
+        // React Native has no aria-describedby: the hint makes screen readers read the error
+        // when the field is focused.
+        accessibilityHint={error}
         placeholderTextColor={colors.textMuted}
         style={[styles.input, focused && styles.focused, error ? styles.invalid : null, style]}
         onFocus={(event) => {
@@ -78,7 +81,7 @@ const useStyles = makeStyles((colors) => ({
     minHeight: 48,
     paddingHorizontal: 14,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.borderStrong,
     borderRadius: radius.sm,
     backgroundColor: colors.surface,
     color: colors.text,
