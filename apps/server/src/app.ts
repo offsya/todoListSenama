@@ -5,6 +5,7 @@ import { env } from './config/env.js';
 import { isDatabaseConnected } from './db/mongoose.js';
 import { httpLogger } from './lib/logger.js';
 import { errorHandler, notFoundHandler } from './middleware/error-handler.js';
+import { todosRouter } from './modules/todos/todos.router.js';
 
 /** Builds the Express application. Kept separate from `index.ts` so tests can run it without a port. */
 export function createApp(): Express {
@@ -19,6 +20,8 @@ export function createApp(): Express {
     const dbUp = isDatabaseConnected();
     res.status(dbUp ? 200 : 503).json({ status: dbUp ? 'ok' : 'unavailable' });
   });
+
+  app.use('/todos', todosRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);
