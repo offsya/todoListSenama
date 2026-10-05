@@ -1,0 +1,69 @@
+# The stack from the images on Docker Hub, published there as offsya/todolistsenamasoft:compose.
+# No source code and no configuration needed; scripts/start-todo.bat runs it with a double-click:
+#   docker compose -f oci://docker.io/offsya/todolistsenamasoft:compose up -d
+#
+#   http://localhost:8080   web app
+#   http://localhost:8082   mobile app (web build of the Expo app)
+#   http://localhost:4000   API (for the mobile app on a phone or emulator)
+#
+# Publish after a change:  docker compose publish offsya/todolistsenamasoft:compose  (from deploy/)
+# The same stack built from source is ../docker-compose.yml; keep the two in sync. This file has
+# no ${VARIABLES} on purpose: Compose asks to confirm them when it runs a published stack.
+name: todolistsenamasoft
+
+services:
+  mongo:
+    image: mongo:8
+    container_name: todoListSenamaSoft-mongo
+    restart: unless-stopped
+    volumes:
+      - mongo-data:/data/db
+    # No published port: only the API talks to the database (it runs without a password).
+    healthcheck:
+      test: ['CMD', 'mongosh', '--quiet', '--eval', "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    image: offsya/todolistsenamasoft:api
+    container_name: todoListSenamaSoft-api
+    restart: unless-stopped
+    init: true
+    environment:
+      NODE_ENV: production
+      MONGODB_URI: mongodb://mongo:27017/todo-app
+      # Every request comes through nginx, which sets X-Forwarded-For.
+      TRUST_PROXY: 1
+    # The JWT secret: a random one is generated on the first start and kept in this volume.
+    volumes:
+      - api-data:/var/lib/todo-api
+    # No published port: the web service publishes the API on port 4000 through nginx.
+    depends_on:
+      mongo:
+        condition: service_healthy
+
+  web:
+    image: offsya/todolistsenamasoft:web
+    container_name: todoListSenamaSoft-web
+    restart: unless-stopped
+    ports:
+      - '8080:80'
+      - '4000:4000'
+    depends_on:
+      api:
+        condition: service_healthy
+
+  mobile-web:
+    image: offsya/todolistsenamasoft:mobile-web
+    container_name: todoListSenamaSoft-mobile-web
+    restart: unless-stopped
+    ports:
+      - '8082:80'
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  mongo-data:
+  api-data:
