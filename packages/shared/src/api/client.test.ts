@@ -87,7 +87,7 @@ describe('createApiClient', () => {
     await expect(api.todos.list()).rejects.toMatchObject({ status: 502, code: 'INTERNAL_ERROR' });
   });
 
-  it('reports a rejected token via onUnauthorized', async () => {
+  it('reports the rejected token via onUnauthorized', async () => {
     const onUnauthorized = vi.fn();
     const { api } = setup(
       jsonResponse(401, { error: { code: 'UNAUTHORIZED', message: 'Token expired' } }),
@@ -95,7 +95,7 @@ describe('createApiClient', () => {
     );
 
     await expect(api.todos.list()).rejects.toMatchObject({ status: 401 });
-    expect(onUnauthorized).toHaveBeenCalledOnce();
+    expect(onUnauthorized).toHaveBeenCalledExactlyOnceWith('expired');
   });
 
   it('does not treat wrong credentials as an expired session', async () => {

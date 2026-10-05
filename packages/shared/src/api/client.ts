@@ -11,8 +11,11 @@ export interface ApiClientOptions {
   baseUrl: string;
   /** Returns the current access token; requests go without `Authorization` when there is none. */
   getToken?: () => MaybePromise<string | null | undefined>;
-  /** Called when the API rejects the token of an authenticated request (HTTP 401). */
-  onUnauthorized?: () => void;
+  /**
+   * Called when the API rejects the token of an authenticated request (HTTP 401), with that
+   * token: by the time a slow response arrives, the user may have signed in again.
+   */
+  onUnauthorized?: (rejectedToken: string) => void;
   /** Request timeout in milliseconds. */
   timeoutMs?: number;
   /** Custom fetch implementation, mostly for tests. Defaults to the global `fetch`. */
@@ -71,9 +74,9 @@ export function createApiClient(options: ApiClientOptions) {
     if (response.status === 204) return undefined as T;
 
     if (!response.ok) {
-      // A 401 on a request that carried a token means the session is no longer valid.
+      // A 401 on a request that carried a token means that token is no longer valid.
       // A 401 from the login endpoint (wrong password) must not log the user out.
-      if (response.status === 401 && token) options.onUnauthorized?.();
+      if (response.status === 401 && token) options.onUnauthorized?.(token);
       throw toApiError(response.status, payload);
     }
 

@@ -20,6 +20,8 @@ const [a, b, c] = [makeTodo('a', 'A'), makeTodo('b', 'B'), makeTodo('c', 'C')];
 
 const serverError = () => new ApiError(500, 'INTERNAL_ERROR', 'Internal server error');
 
+const otherSession = { token: 't2', user: { id: 'u2', email: 'b@example.com', createdAt: '' } };
+
 /** A request the test settles by hand; settling returns a promise to pass to `act`. */
 function deferred<T>() {
   let resolvePromise: (value: T) => void = () => undefined;
@@ -214,6 +216,49 @@ describe('useCreateTodo', () => {
 
     await waitFor(() => expect(texts(result.current.todos.data)).toEqual(['C', 'A', 'B']));
     await waitFor(() => expect(list).toHaveBeenCalledTimes(2));
+  });
+
+  it("keeps a todo created just before switching accounts out of the next user's list", async () => {
+    const request = deferred<Todo>();
+    const create = vi.fn(() => request.promise);
+    const list = vi
+      .fn<ApiClient['todos']['list']>()
+      .mockResolvedValueOnce([a])
+      .mockResolvedValueOnce([b])
+      .mockReturnValue(new Promise(() => undefined));
+    const { queryClient, sessionStore, wrapper } = setup([], { create, list });
+    const { result } = renderHook(() => ({ todos: useTodos(), create: useCreateTodo() }), {
+      wrapper,
+    });
+    await waitFor(() => expect(result.current.todos.data).toEqual([a]));
+
+    act(() => result.current.create.mutate('C'));
+    // Another tab signs in as someone else before the request returns.
+    act(() => sessionStore.set(otherSession));
+    await waitFor(() => expect(result.current.todos.data).toEqual([b]));
+    await act(() => request.resolve(c));
+
+    await waitFor(() => expect(result.current.create.isSuccess).toBe(true));
+    expect(queryClient.getQueryData(['todos', 'u2'])).toEqual([b]);
+  });
+
+  it("does not report a failure of the previous user's request", async () => {
+    const request = deferred<Todo>();
+    const create = vi.fn(() => request.promise);
+    const onError = vi.fn();
+    const { sessionStore, wrapper } = setup([a], { create });
+    const { result } = renderHook(
+      () => ({ todos: useTodos(), create: useCreateTodo({ onError }) }),
+      { wrapper },
+    );
+    await waitFor(() => expect(result.current.todos.data).toEqual([a]));
+
+    act(() => result.current.create.mutate('C'));
+    act(() => sessionStore.set(otherSession));
+    await act(() => request.reject(serverError()));
+
+    await waitFor(() => expect(result.current.create.isError).toBe(true));
+    expect(onError).not.toHaveBeenCalled();
   });
 
   it('does not make up a list when none was loaded', async () => {

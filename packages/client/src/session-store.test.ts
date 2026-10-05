@@ -133,6 +133,24 @@ describe('createSessionStore', () => {
     expect(store.getState()).toEqual({ status: 'ready', session: null });
   });
 
+  it('signs out on a rejected token only if it is still the current one', async () => {
+    const storage = memoryStorage();
+    const store = createSessionStore(storage);
+    const newer: Session = { ...session, token: 'newer-token' };
+
+    // A request sent with the old token fails after the user has signed in again.
+    store.set(newer);
+    store.invalidate(session.token);
+    await flush();
+    expect(store.getState().session).toEqual(newer);
+    expect(storage.data.get(KEY)).toBe(JSON.stringify(newer));
+
+    store.invalidate(newer.token);
+    await flush();
+    expect(store.getState().session).toBeNull();
+    expect(storage.data.has(KEY)).toBe(false);
+  });
+
   it('stops notifying after unsubscribe', () => {
     const store = createSessionStore(memoryStorage());
     const listener = vi.fn();

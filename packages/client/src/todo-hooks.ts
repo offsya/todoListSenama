@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import type { Todo, UpdateTodoInput } from '@todo/shared';
 import { useSession, useTodoClient } from './context.js';
 
@@ -7,6 +7,8 @@ export function useTodosQueryKey() {
   const userId = useSession()?.user.id;
   return ['todos', userId] as const;
 }
+
+type TodosQueryKey = ReturnType<typeof useTodosQueryKey>;
 
 /** Shared by all todo mutations, so the list can be resynced once the last of them settles. */
 const TODO_MUTATION_KEY = ['todos'] as const;
@@ -28,15 +30,13 @@ export function useTodos() {
 }
 
 /**
- * Edits are applied to the cache right away (optimistic updates). Responses of overlapping
- * requests can arrive in any order, so instead of trusting each response the list is refetched
- * once the last pending mutation has settled.
+ * One user's cached list. Edits are applied to it right away (optimistic updates). Responses of
+ * overlapping requests can arrive in any order, so instead of trusting each response the list
+ * is refetched once the last pending mutation has settled.
  */
-function useTodosCache() {
-  const queryClient = useQueryClient();
-  const queryKey = useTodosQueryKey();
-
+function todosCache(queryClient: QueryClient, queryKey: TodosQueryKey) {
   return {
+    userId: queryKey[1],
     get: () => queryClient.getQueryData<Todo[]>(queryKey),
     /** Updates a loaded list; never creates one, as a partial list would look complete. */
     update: (change: (todos: Todo[]) => Todo[]) =>
@@ -51,20 +51,43 @@ function useTodosCache() {
   };
 }
 
+type TodosCache = ReturnType<typeof todosCache>;
+
+/**
+ * Mutations pin the cache of the user who starts them in `onMutate` and work through that from
+ * then on. TanStack Query runs the later callbacks of a pending mutation with the options of
+ * the latest render, which may already belong to the next user (signed out, or switched
+ * accounts in another tab): going through the current query key would put one user's todo
+ * into another user's list.
+ */
+function useTodosCache() {
+  const queryClient = useQueryClient();
+  const queryKey = useTodosQueryKey();
+
+  return {
+    pin: () => todosCache(queryClient, queryKey),
+    /** Whether the user who started a mutation is still the one signed in. */
+    isCurrent: (cache: TodosCache | undefined) => cache?.userId === queryKey[1],
+  };
+}
+
 export function useCreateTodo({ onError }: TodoMutationOptions = {}) {
   const { api } = useTodoClient();
-  const cache = useTodosCache();
+  const todos = useTodosCache();
 
   return useMutation({
     mutationKey: TODO_MUTATION_KEY,
     mutationFn: (text: string) => api.todos.create({ text }),
-    onSuccess: async (created) => {
+    onMutate: () => ({ cache: todos.pin() }),
+    onSuccess: async (created, _text, { cache }) => {
       // A list fetched before the todo existed must not replace the one that has it.
       await cache.cancelFetches();
-      cache.update((todos) => [created, ...todos]);
+      cache.update((list) => [created, ...list]);
     },
-    onError,
-    onSettled: cache.syncAfterLastMutation,
+    onError: (error, _text, context) => {
+      if (todos.isCurrent(context?.cache)) onError?.(error);
+    },
+    onSettled: (_created, _error, _text, context) => context?.cache.syncAfterLastMutation(),
   });
 }
 
@@ -75,60 +98,62 @@ export interface UpdateTodoVariables {
 
 export function useUpdateTodo({ onError }: TodoMutationOptions = {}) {
   const { api } = useTodoClient();
-  const cache = useTodosCache();
+  const todos = useTodosCache();
 
-  const patch = (id: string, changes: UpdateTodoInput) =>
-    cache.update((todos) => todos.map((todo) => (todo.id === id ? { ...todo, ...changes } : todo)));
+  const patch = (cache: TodosCache, id: string, changes: UpdateTodoInput) =>
+    cache.update((list) => list.map((todo) => (todo.id === id ? { ...todo, ...changes } : todo)));
 
   return useMutation({
     mutationKey: TODO_MUTATION_KEY,
     mutationFn: ({ id, changes }: UpdateTodoVariables) => api.todos.update(id, changes),
     onMutate: async ({ id, changes }) => {
+      const cache = todos.pin();
       await cache.cancelFetches();
       const previous = cache.get()?.find((todo) => todo.id === id);
-      patch(id, changes);
-      return { previous };
+      patch(cache, id, changes);
+      return { cache, previous };
     },
     onError: (error, { id, changes }, context) => {
       // Undo only the fields this request changed: other edits may have landed meanwhile.
-      const previous = context?.previous;
-      if (previous) {
+      if (context?.previous) {
+        const { cache, previous } = context;
         const fields = Object.keys(changes) as (keyof UpdateTodoInput)[];
-        patch(id, Object.fromEntries(fields.map((field) => [field, previous[field]])));
+        patch(cache, id, Object.fromEntries(fields.map((field) => [field, previous[field]])));
       }
-      onError?.(error);
+      if (todos.isCurrent(context?.cache)) onError?.(error);
     },
-    onSettled: cache.syncAfterLastMutation,
+    onSettled: (_todo, _error, _variables, context) => context?.cache.syncAfterLastMutation(),
   });
 }
 
 export function useDeleteTodo({ onError }: TodoMutationOptions = {}) {
   const { api } = useTodoClient();
-  const cache = useTodosCache();
+  const todos = useTodosCache();
 
   return useMutation({
     mutationKey: TODO_MUTATION_KEY,
     mutationFn: (id: string) => api.todos.remove(id),
     onMutate: async (id) => {
+      const cache = todos.pin();
       await cache.cancelFetches();
-      const todos = cache.get() ?? [];
-      const index = todos.findIndex((todo) => todo.id === id);
+      const list = cache.get() ?? [];
+      const index = list.findIndex((todo) => todo.id === id);
       cache.update((current) => current.filter((todo) => todo.id !== id));
-      return { removed: todos[index], index };
+      return { cache, removed: list[index], index };
     },
     onError: (error, _id, context) => {
       // Put the todo back where it was, unless the list already has it again.
-      const removed = context?.removed;
-      if (removed) {
-        cache.update((todos) => {
-          if (todos.some((todo) => todo.id === removed.id)) return todos;
-          const restored = [...todos];
-          restored.splice(Math.min(context.index, restored.length), 0, removed);
+      if (context?.removed) {
+        const { cache, removed, index } = context;
+        cache.update((list) => {
+          if (list.some((todo) => todo.id === removed.id)) return list;
+          const restored = [...list];
+          restored.splice(Math.min(index, restored.length), 0, removed);
           return restored;
         });
       }
-      onError?.(error);
+      if (todos.isCurrent(context?.cache)) onError?.(error);
     },
-    onSettled: cache.syncAfterLastMutation,
+    onSettled: (_result, _error, _id, context) => context?.cache.syncAfterLastMutation(),
   });
 }
