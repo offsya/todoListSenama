@@ -5,9 +5,14 @@
 #   web         React web app served by nginx, which also proxies /api to the API and
 #               publishes the API on port 4000
 #   mobile-web  Web build of the Expo app, served the same way
+#   all-in-one  All of the above plus MongoDB in a single container, for Docker Desktop's
+#               "Run" button (published as offsya/todolistsenamasoft:latest)
 
 ARG NODE_IMAGE=node:24-alpine
 ARG NGINX_IMAGE=nginx:1.29-alpine
+ARG MONGO_IMAGE=mongo:8
+# The all-in-one image is based on Ubuntu (MongoDB's image) and needs a glibc build of Node.js.
+ARG NODE_GLIBC_IMAGE=node:24-bookworm-slim
 
 # ---- Dependencies (cached until a manifest or the lock file changes) ----------------------
 FROM ${NODE_IMAGE} AS manifests
@@ -89,3 +94,38 @@ RUN cd apps/mobile && npx expo export --platform web --output-dir dist-web
 FROM spa AS mobile-web
 COPY docker/nginx/csp-mobile-web.conf /etc/nginx/csp.conf
 COPY --from=mobile-web-build /app/apps/mobile/dist-web /usr/share/nginx/html
+
+# ---- Everything in one container -----------------------------------------------------------
+# Docker Desktop's "Run" button starts a single image, so this one runs MongoDB, the API and
+# nginx side by side under tini (docker/all-in-one/start.sh). One process per container, as in
+# docker-compose.yml, stays the regular setup; this image exists for a no-terminal start.
+FROM ${NODE_GLIBC_IMAGE} AS node-glibc
+
+FROM ${MONGO_IMAGE} AS all-in-one
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends nginx tini \
+  && rm -rf /var/lib/apt/lists/* /etc/nginx/sites-enabled /etc/nginx/conf.d
+COPY --from=node-glibc /usr/local/bin/node /usr/local/bin/node
+WORKDIR /app
+# The API's dependencies are plain JavaScript (no native addons), so the Alpine install works.
+COPY --from=api-deps /app/node_modules node_modules
+COPY --from=api-deps /app/apps/server/node_modules apps/server/node_modules
+COPY packages/shared/package.json packages/shared/
+COPY --from=packages /app/packages/shared/dist packages/shared/dist
+COPY apps/server/package.json apps/server/
+COPY --from=api-build /app/apps/server/dist apps/server/dist
+COPY --from=web-build /app/apps/web/dist /srv/web
+COPY --from=mobile-web-build /app/apps/mobile/dist-web /srv/mobile-web
+COPY docker/all-in-one/nginx.conf /etc/nginx/nginx.conf
+COPY docker/nginx/csp-web.conf docker/nginx/csp-mobile-web.conf /etc/nginx/
+COPY --chmod=755 docker/api-entrypoint.sh /usr/local/bin/api-entrypoint
+COPY --chmod=755 docker/all-in-one/start.sh /usr/local/bin/start-todo
+# Data lives in volumes: /data/db (declared by the MongoDB image) and the JWT secret here.
+RUN mkdir -p /var/lib/todo-api && chown mongodb:mongodb /var/lib/todo-api
+VOLUME /var/lib/todo-api
+USER mongodb
+# 8080 web app, 8082 mobile app (web build), 4000 API for the mobile app on a phone.
+EXPOSE 8080 8082 4000
+HEALTHCHECK --interval=10s --timeout=3s --start-period=30s --retries=5 \
+  CMD node -e "fetch('http://127.0.0.1:8080/api/health').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"
+ENTRYPOINT ["tini", "--", "start-todo"]
