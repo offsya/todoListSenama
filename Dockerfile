@@ -52,10 +52,14 @@ COPY packages/shared/package.json packages/shared/
 COPY --from=packages /app/packages/shared/dist packages/shared/dist
 COPY apps/server/package.json apps/server/
 COPY --from=api-build /app/apps/server/dist apps/server/dist
+COPY --chmod=755 docker/api-entrypoint.sh /usr/local/bin/api-entrypoint
+# Holds the JWT secret generated when none is configured; compose mounts a volume here.
+RUN mkdir -p /var/lib/todo-api && chown node:node /var/lib/todo-api
 USER node
 EXPOSE 4000
 HEALTHCHECK --interval=10s --timeout=3s --start-period=15s --retries=5 \
   CMD node -e "fetch('http://127.0.0.1:4000/health').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"
+ENTRYPOINT ["api-entrypoint"]
 CMD ["node", "apps/server/dist/index.js"]
 
 # ---- nginx for the single-page apps --------------------------------------------------------
