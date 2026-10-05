@@ -22,7 +22,6 @@
   --radius: 12px;
   --radius-lg: 18px;
   --shadow: 0 1px 2px rgb(20 22 40 / 6%), 0 12px 32px rgb(20 22 40 / 7%);
-  --focus-ring: 0 0 0 3px rgb(79 70 229 / 35%);
   --transition: 150ms ease;
 
   font-family:
@@ -58,7 +57,6 @@
     --color-danger: #ff7a6e;
     --color-danger-soft: rgb(255 122 110 / 12%);
     --shadow: 0 1px 2px rgb(0 0 0 / 40%), 0 12px 32px rgb(0 0 0 / 30%);
-    --focus-ring: 0 0 0 3px rgb(127 119 255 / 40%);
   }
 }
 
@@ -100,9 +98,11 @@ a:hover {
   text-decoration: underline;
 }
 
+/* An outline rather than a soft shadow: it keeps 3:1 contrast against the page (WCAG 1.4.11),
+   and Windows High Contrast drops box-shadow, which would leave no focus indicator at all. */
 :focus-visible {
-  outline: none;
-  box-shadow: var(--focus-ring);
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 @media (prefers-reduced-motion: reduce) {

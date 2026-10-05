@@ -61,6 +61,7 @@ export function TodosPage() {
               <TodoItem
                 key={todo.id}
                 todo={todo}
+                leavesViewOnToggle={!activeFilter.matches({ ...todo, completed: !todo.completed })}
                 onToggle={(completed) => updateTodo.mutate({ id: todo.id, changes: { completed } })}
                 onRename={(text) => updateTodo.mutate({ id: todo.id, changes: { text } })}
                 onDelete={() => deleteTodo.mutate(todo.id)}
