@@ -74,6 +74,8 @@ docker compose -f oci://docker.io/offsya/todolistsenamasoft:compose up -d
 docker compose up -d --build
 ```
 
+Без терминала, через Docker Desktop: найдите в поиске `offsya/todolistsenamasoft`, нажмите **Run** (тег `latest`) и в **Optional settings** укажите Host port `8080` для порта `8080`. Это образ «всё в одном», подробности — в разделе [«Готовые образы»](#готовые-образы).
+
 | Адрес                 | Что там                                                                         |
 | --------------------- | ------------------------------------------------------------------------------- |
 | http://localhost:8080 | Веб-клиент                                                                      |
@@ -104,12 +106,15 @@ docker compose down
 
 ### Готовые образы
 
-Запустить стек без исходников можно двумя способами:
+Запустить стек без исходников можно тремя способами:
 
 - одной командой из раздела выше: compose-файл опубликован на Docker Hub с тегом `compose`;
-- из папки [`deploy/`](deploy): в ней тот же `docker-compose.yml` и короткая инструкция, получатель копирует папку и выполняет `docker compose up -d`.
+- из папки [`deploy/`](deploy): в ней тот же `docker-compose.yml` и короткая инструкция, получатель копирует папку и выполняет `docker compose up -d`;
+- через Docker Desktop: кнопка **Run** умеет запускать только один образ, поэтому для неё есть образ «всё в одном» (`offsya/todolistsenamasoft:latest`, он же `:all-in-one`), пошагово — в [`deploy/README.md`](deploy/README.md).
 
 В опубликованном compose-файле намеренно нет переменных `${...}`: перед запуском опубликованного стека Compose просит подтвердить каждую переменную, и запуск перестал бы быть «просто командой».
+
+Образ «всё в одном» — цель `all-in-one` того же Dockerfile. В нём MongoDB, API и nginx работают рядом под `tini` ([`docker/all-in-one/start.sh`](docker/all-in-one/start.sh)) от непривилегированного пользователя, а данные лежат в volume. Несколько процессов в одном контейнере — осознанное отступление от правила «один процесс — один контейнер», ради запуска одной кнопкой. Основной способ — по-прежнему отдельные контейнеры. CI собирает этот образ и прогоняет по нему тот же smoke-тест.
 
 Обновить образы на Docker Hub после изменений (нужен `docker login` с доступом к `offsya`):
 
@@ -133,6 +138,20 @@ docker save offsya/todolistsenamasoft:api offsya/todolistsenamasoft:web offsya/t
 
 ```bash
 cd deploy && docker compose publish offsya/todolistsenamasoft:compose
+```
+
+Собрать и опубликовать образ «всё в одном»:
+
+```bash
+docker build --target all-in-one -t offsya/todolistsenamasoft:latest -t offsya/todolistsenamasoft:all-in-one .
+```
+
+```bash
+docker push offsya/todolistsenamasoft:latest
+```
+
+```bash
+docker push offsya/todolistsenamasoft:all-in-one
 ```
 
 ## Локальный запуск для разработки
