@@ -35,11 +35,12 @@ export function resolveApiUrl({
 }: ApiUrlSources): string {
   if (envUrl) {
     // Catch typos and shell rewrites (Git Bash turns "/api" into "C:/Program Files/Git/api")
-    // here, instead of as a puzzling network error on the first request.
-    if (!/^(https?:\/\/|\/)/.test(envUrl)) {
-      throw new Error(
-        `EXPO_PUBLIC_API_URL must be an http(s) URL or a path starting with "/", got "${envUrl}".`,
-      );
+    // here, instead of as a puzzling network error on the first request. A path is relative to
+    // the page, so it only works on the web (the Docker build uses "/api").
+    const isWeb = platform === 'web';
+    if (!(isWeb ? /^(https?:\/\/|\/)/ : /^https?:\/\//).test(envUrl)) {
+      const expected = isWeb ? 'an http(s) URL or a path starting with "/"' : 'an http(s) URL';
+      throw new Error(`EXPO_PUBLIC_API_URL must be ${expected} on ${platform}, got "${envUrl}".`);
     }
     return envUrl;
   }

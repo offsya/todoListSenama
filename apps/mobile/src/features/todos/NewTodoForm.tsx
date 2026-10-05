@@ -38,7 +38,9 @@ export function NewTodoForm() {
           onChangeText={onChange}
           onBlur={onBlur}
           onSubmitEditing={submit}
+          // Keep the keyboard open for the next todo. react-native-web reads only blurOnSubmit.
           submitBehavior="submit"
+          blurOnSubmit={false}
           placeholder="What needs to be done?"
           placeholderTextColor={colors.textMuted}
           aria-label="New todo"

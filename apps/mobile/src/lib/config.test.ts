@@ -22,6 +22,12 @@ describe('resolveApiUrl', () => {
     ).toThrow('EXPO_PUBLIC_API_URL must be an http(s) URL or a path');
   });
 
+  it('rejects a path on a device, where there is no page to be relative to', () => {
+    expect(() => resolveApiUrl({ envUrl: '/api', platform: 'android', isDev: true })).toThrow(
+      'EXPO_PUBLIC_API_URL must be an http(s) URL on android, got "/api"',
+    );
+  });
+
   it('uses the computer running the dev server on a device', () => {
     expect(
       resolveApiUrl({ platform: 'android', isDev: true, devServerHostUri: '192.168.1.10:8081' }),

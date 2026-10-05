@@ -23,6 +23,11 @@ export interface SessionStore {
   getToken: () => string | undefined;
   subscribe: (listener: () => void) => () => void;
   set: (session: Session | null) => void;
+  /**
+   * Signs out if the session still uses this token, which the API has rejected. A late 401 for
+   * an older token (the user has signed in again since, maybe in another tab) changes nothing.
+   */
+  invalidate: (token: string) => void;
   /** Reads the persisted session again, e.g. after another browser tab changed it. */
   reload: () => Promise<void>;
 }
@@ -80,6 +85,9 @@ export function createSessionStore(
           session ? storage.setItem(key, JSON.stringify(session)) : storage.removeItem(key),
         )
         .catch(() => undefined);
+    },
+    invalidate: (token) => {
+      if (state.session?.token === token) store.set(null);
     },
     reload,
   };

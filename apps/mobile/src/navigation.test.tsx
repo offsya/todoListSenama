@@ -113,6 +113,43 @@ describe('navigation', () => {
     expect(mockApi.auth.login).not.toHaveBeenCalled();
   });
 
+  it('creates an account and opens the new, empty list', async () => {
+    mockApi.auth.register.mockResolvedValue(mockSession);
+    serverTodos = [];
+    const app = renderApp();
+    await app;
+
+    await fireEvent.press(await screen.findByText('Create one'));
+    await fireEvent.changeText(await screen.findByLabelText('Email'), 'alice@example.com');
+    await fireEvent.changeText(screen.getByLabelText('Password'), 'correct-horse-battery');
+    await fireEvent.changeText(screen.getByLabelText('Confirm password'), 'correct-horse-batter');
+    await fireEvent.press(screen.getByRole('button', { name: 'Create account' }));
+
+    expect(await screen.findByText('Passwords do not match')).toBeOnTheScreen();
+    expect(mockApi.auth.register).not.toHaveBeenCalled();
+
+    await fireEvent.changeText(screen.getByLabelText('Confirm password'), 'correct-horse-battery');
+    await fireEvent.press(screen.getByRole('button', { name: 'Create account' }));
+
+    expect(
+      await screen.findByText('Nothing to do yet. Add your first todo above.'),
+    ).toBeOnTheScreen();
+    expect(app.getPathname()).toBe('/');
+    // The API rejects unknown fields, so the confirmation must not be sent.
+    expect(mockApi.auth.register).toHaveBeenCalledWith({
+      email: 'alice@example.com',
+      password: 'correct-horse-battery',
+    });
+  });
+
+  it('shows a not-found screen for unknown links', async () => {
+    const app = renderRouter('./src/app', { initialUrl: '/no-such-page' });
+    await app;
+
+    expect(await screen.findByText('Page not found')).toBeOnTheScreen();
+    expect(screen.getByText('Back to my todos')).toBeOnTheScreen();
+  });
+
   it('restores the session saved in the keychain', async () => {
     await SecureStore.setItemAsync(SESSION_KEY, JSON.stringify(mockSession));
     await sessionStore.reload();
@@ -160,6 +197,19 @@ describe('todo list', () => {
 
     await waitFor(() => expect(screen.getByRole('checkbox', { name: 'Buy milk' })).toBeChecked());
     expect(mockApi.todos.update).toHaveBeenCalledWith('t1', { completed: true });
+  });
+
+  it('renames a todo', async () => {
+    const app = renderApp();
+    await app;
+
+    await fireEvent.press(await screen.findByRole('button', { name: 'Edit "Buy milk"' }));
+    const input = screen.getByLabelText('Edit todo');
+    await fireEvent.changeText(input, 'Buy oat milk');
+    await fireEvent(input, 'submitEditing');
+
+    expect(await screen.findByText('Buy oat milk')).toBeOnTheScreen();
+    expect(mockApi.todos.update).toHaveBeenCalledWith('t1', { text: 'Buy oat milk' });
   });
 
   it('reports a failed edit and rolls it back', async () => {

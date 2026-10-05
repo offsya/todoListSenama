@@ -28,6 +28,8 @@ describe('signing in', () => {
     expect(screen.getByText('alice@example.com')).toBeInTheDocument();
     expect(router.state.location.pathname).toBe('/');
     expect(sessionStore.getToken()).toBe(session.token);
+    // Keyboard users land on the new todo field, not on <body>.
+    expect(screen.getByLabelText('New todo')).toHaveFocus();
   });
 
   it('shows the API error for wrong credentials', async () => {

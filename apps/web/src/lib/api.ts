@@ -8,7 +8,7 @@ const baseUrl = new URL(import.meta.env.VITE_API_URL || '/api', window.location.
 export const api = createApiClient({
   baseUrl,
   getToken: sessionStore.getToken,
-  // The token expired or is no longer valid: drop the session and the route guard
-  // sends the user to the login page.
-  onUnauthorized: () => sessionStore.set(null),
+  // The token expired or is no longer valid: drop the session (unless the user has signed in
+  // again meanwhile), and the route guard sends the user to the login page.
+  onUnauthorized: sessionStore.invalidate,
 });

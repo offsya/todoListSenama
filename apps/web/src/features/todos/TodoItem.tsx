@@ -8,12 +8,20 @@ import styles from './TodoItem.module.css';
 
 interface TodoItemProps {
   todo: Todo;
+  /** Toggling the status takes the item out of the current filter. */
+  leavesViewOnToggle?: boolean;
   onToggle: (completed: boolean) => void;
   onRename: (text: string) => void;
   onDelete: () => void;
 }
 
-export function TodoItem({ todo, onToggle, onRename, onDelete }: TodoItemProps) {
+export function TodoItem({
+  todo,
+  leavesViewOnToggle = false,
+  onToggle,
+  onRename,
+  onDelete,
+}: TodoItemProps) {
   const [isEditing, setIsEditing] = useState(false);
   const itemRef = useRef<HTMLLIElement>(null);
   const editButtonRef = useRef<HTMLButtonElement>(null);
@@ -37,14 +45,24 @@ export function TodoItem({ todo, onToggle, onRename, onDelete }: TodoItemProps) 
     if (text !== undefined && text !== todo.text) onRename(text);
   };
 
-  const handleDelete = () => {
-    // The item disappears right away: move focus to a neighbour instead of losing it.
+  // The item is about to disappear (optimistic updates are immediate): move focus to a
+  // neighbour, or keyboard and screen reader users would be sent back to the top of the page.
+  const focusNeighbour = () => {
     const neighbour =
       itemRef.current?.nextElementSibling ?? itemRef.current?.previousElementSibling;
     const nextFocus =
       neighbour?.querySelector<HTMLElement>('input[type="checkbox"]') ??
       document.getElementById(NEW_TODO_INPUT_ID);
     nextFocus?.focus();
+  };
+
+  const handleToggle = (completed: boolean) => {
+    if (leavesViewOnToggle) focusNeighbour();
+    onToggle(completed);
+  };
+
+  const handleDelete = () => {
+    focusNeighbour();
     onDelete();
   };
 
@@ -54,7 +72,7 @@ export function TodoItem({ todo, onToggle, onRename, onDelete }: TodoItemProps) 
         type="checkbox"
         className={styles.checkbox}
         checked={todo.completed}
-        onChange={(event) => onToggle(event.target.checked)}
+        onChange={(event) => handleToggle(event.target.checked)}
         aria-label={todo.text}
       />
 

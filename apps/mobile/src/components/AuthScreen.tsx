@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { makeStyles, radius, useColors } from '../theme';
+import { KeyboardAvoidingContainer } from './KeyboardAvoidingContainer';
 
 interface AuthScreenProps {
   title: string;
@@ -20,30 +21,30 @@ export function AuthScreen({ title, subtitle, children, footer, hasHeader }: Aut
 
   return (
     <SafeAreaView style={styles.safeArea} edges={hasHeader ? ['bottom'] : ['top', 'bottom']}>
-      {/* iOS: the scroll view insets its content above the keyboard, which also accounts for a
-          native header (KeyboardAvoidingView does not). Android resizes the window itself. */}
-      <ScrollView
-        contentContainerStyle={styles.content}
-        keyboardShouldPersistTaps="handled"
-        automaticallyAdjustKeyboardInsets
-      >
-        <View style={styles.brand}>
-          <View style={styles.logo}>
-            <Ionicons name="checkmark" size={18} color={colors.onPrimary} />
+      <KeyboardAvoidingContainer>
+        <ScrollView
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+          automaticallyAdjustKeyboardInsets
+        >
+          <View style={styles.brand}>
+            <View style={styles.logo}>
+              <Ionicons name="checkmark" size={18} color={colors.onPrimary} />
+            </View>
+            <Text style={styles.brandName}>Todo</Text>
           </View>
-          <Text style={styles.brandName}>Todo</Text>
-        </View>
 
-        <View style={styles.card}>
-          <Text style={styles.title} role="heading">
-            {title}
-          </Text>
-          <Text style={styles.subtitle}>{subtitle}</Text>
-          <View style={styles.form}>{children}</View>
-        </View>
+          <View style={styles.card}>
+            <Text style={styles.title} role="heading">
+              {title}
+            </Text>
+            <Text style={styles.subtitle}>{subtitle}</Text>
+            <View style={styles.form}>{children}</View>
+          </View>
 
-        <View style={styles.footer}>{footer}</View>
-      </ScrollView>
+          <View style={styles.footer}>{footer}</View>
+        </ScrollView>
+      </KeyboardAvoidingContainer>
     </SafeAreaView>
   );
 }

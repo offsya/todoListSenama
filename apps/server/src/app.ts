@@ -6,11 +6,13 @@ import { isDatabaseConnected } from './db/mongoose.js';
 import { httpLogger } from './lib/logger.js';
 import { errorHandler, notFoundHandler } from './middleware/error-handler.js';
 import { createAuthRouter } from './modules/auth/auth.router.js';
-import { todosRouter } from './modules/todos/todos.router.js';
+import { createTodosRouter } from './modules/todos/todos.router.js';
 
 export interface AppOptions {
   /** Max login/registration attempts per IP within 15 minutes. */
   authRateLimit: number;
+  /** Max requests to /todos per user within a minute. */
+  todosRateLimit: number;
   /** Number of trusted reverse proxies in front of the API. */
   trustProxy: number;
 }
@@ -18,6 +20,7 @@ export interface AppOptions {
 /** Builds the Express application. Kept separate from `index.ts` so tests can run it without a port. */
 export function createApp({
   authRateLimit = env.AUTH_RATE_LIMIT_MAX,
+  todosRateLimit = env.TODOS_RATE_LIMIT_MAX,
   trustProxy = env.TRUST_PROXY,
 }: Partial<AppOptions> = {}): Express {
   const app = express();
@@ -36,7 +39,7 @@ export function createApp({
   });
 
   app.use('/auth', createAuthRouter({ rateLimit: authRateLimit }));
-  app.use('/todos', todosRouter);
+  app.use('/todos', createTodosRouter({ rateLimit: todosRateLimit }));
 
   app.use(notFoundHandler);
   app.use(errorHandler);

@@ -2,6 +2,13 @@ import type { CreateTodoInput, Todo, UpdateTodoInput } from '@todo/shared';
 import { HttpError } from '../../lib/http-error.js';
 import { TodoModel, toTodoDto } from './todo.model.js';
 
+/**
+ * Upper bound for one user's list. `GET /todos` returns the whole list in one response, so an
+ * unbounded list would let a single account make that request slow and memory-hungry for the
+ * whole server.
+ */
+export const MAX_TODOS_PER_USER = 1000;
+
 // Every query is scoped by owner. Someone else's todo is reported as "not found" rather than
 // "forbidden", so other users' todo ids cannot be probed.
 const todoNotFound = () => HttpError.notFound('Todo not found');
@@ -19,6 +26,15 @@ export async function getTodo(ownerId: string, id: string): Promise<Todo> {
 }
 
 export async function createTodo(ownerId: string, input: CreateTodoInput): Promise<Todo> {
+  // Not atomic: parallel requests can overshoot the limit slightly. The per-user rate limit
+  // bounds that, and an exact count is not worth a counter to keep in sync.
+  const count = await TodoModel.countDocuments({ owner: ownerId });
+  if (count >= MAX_TODOS_PER_USER) {
+    throw HttpError.conflict(
+      `You can have at most ${MAX_TODOS_PER_USER} todos. Delete some to add new ones.`,
+    );
+  }
+
   const todo = await TodoModel.create({ ...input, owner: ownerId });
   return toTodoDto(todo);
 }

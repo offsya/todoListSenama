@@ -2,7 +2,15 @@ import { screen, waitFor, within } from '@testing-library/react';
 import { http } from 'msw/http';
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { Session } from '@todo/client';
-import { API_URL, apiError, findStoredTodo, seedTodo, seedUser, server } from '../../test/api-mock';
+import {
+  API_URL,
+  apiError,
+  apiRequests,
+  findStoredTodo,
+  seedTodo,
+  seedUser,
+  server,
+} from '../../test/api-mock';
 import { renderApp } from '../../test/render';
 
 let session: Session;
@@ -51,6 +59,8 @@ describe('TodosPage', () => {
     await user.click(screen.getByRole('button', { name: 'Add' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Text must not be empty');
+    // The fake API would answer with the same message: make sure the form stopped the request.
+    expect(apiRequests()).not.toContain('POST /todos');
   });
 
   it('marks a todo as completed', async () => {
@@ -102,6 +112,8 @@ describe('TodosPage', () => {
     await user.keyboard('{Enter}');
 
     expect(screen.getByRole('alert')).toHaveTextContent('Text must not be empty');
+    expect(screen.getByRole('textbox', { name: 'Edit todo' })).toBeInTheDocument();
+    expect(apiRequests().filter((request) => request.startsWith('PUT'))).toEqual([]);
     expect(findStoredTodo('Buy milk')).toBeDefined();
   });
 
@@ -217,6 +229,21 @@ describe('TodosPage', () => {
 
     await user.click(await screen.findByRole('button', { name: 'Delete "First"' }));
 
+    expect(screen.getByRole('checkbox', { name: 'Second' })).toHaveFocus();
+  });
+
+  it('keeps focus in the list when a todo leaves the current filter', async () => {
+    seedTodo(session, 'Second');
+    seedTodo(session, 'First');
+    const { user } = renderApp('/', { session });
+    await todoList();
+    await user.click(screen.getByRole('button', { name: /^Active/ }));
+
+    // Space on the focused checkbox: "First" is completed and leaves the Active filter.
+    screen.getByRole('checkbox', { name: 'First' }).focus();
+    await user.keyboard(' ');
+
+    expect(screen.queryByRole('checkbox', { name: 'First' })).not.toBeInTheDocument();
     expect(screen.getByRole('checkbox', { name: 'Second' })).toHaveFocus();
   });
 });

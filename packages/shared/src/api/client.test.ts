@@ -87,7 +87,7 @@ describe('createApiClient', () => {
     await expect(api.todos.list()).rejects.toMatchObject({ status: 502, code: 'INTERNAL_ERROR' });
   });
 
-  it('reports a rejected token via onUnauthorized', async () => {
+  it('reports the rejected token via onUnauthorized', async () => {
     const onUnauthorized = vi.fn();
     const { api } = setup(
       jsonResponse(401, { error: { code: 'UNAUTHORIZED', message: 'Token expired' } }),
@@ -95,7 +95,7 @@ describe('createApiClient', () => {
     );
 
     await expect(api.todos.list()).rejects.toMatchObject({ status: 401 });
-    expect(onUnauthorized).toHaveBeenCalledOnce();
+    expect(onUnauthorized).toHaveBeenCalledExactlyOnceWith('expired');
   });
 
   it('does not treat wrong credentials as an expired session', async () => {
@@ -116,6 +116,22 @@ describe('createApiClient', () => {
     const api = createApiClient({ baseUrl: BASE_URL, fetch });
 
     await expect(api.todos.list()).rejects.toMatchObject({ status: 0, code: 'NETWORK_ERROR' });
+  });
+
+  it('applies the timeout to reading the body as well', async () => {
+    // The headers arrive, then the connection stalls. As with the real fetch, aborting the
+    // request fails the body stream.
+    const fetch = vi.fn((_url: string, init: RequestInit) => {
+      const body = new ReadableStream({
+        start(controller) {
+          init.signal?.addEventListener('abort', () => controller.error(new Error('aborted')));
+        },
+      });
+      return Promise.resolve(new Response(body, { status: 200 }));
+    });
+    const api = createApiClient({ baseUrl: BASE_URL, fetch, timeoutMs: 10 });
+
+    await expect(api.todos.list()).rejects.toMatchObject({ code: 'TIMEOUT' });
   });
 
   it('aborts requests that take too long', async () => {

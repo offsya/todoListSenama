@@ -39,6 +39,8 @@ export function NewTodoForm() {
           maxLength={TODO_TEXT_MAX_LENGTH}
           aria-invalid={error ? true : undefined}
           aria-describedby={error ? 'new-todo-error' : undefined}
+          // The page's main action; also gives focus a place after signing in, instead of <body>.
+          autoFocus
           {...register('text')}
         />
         <Button type="submit" loading={createTodo.isPending}>
