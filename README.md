@@ -60,21 +60,31 @@ graph LR
 
 ## Запуск в Docker
 
-Весь стек — MongoDB, API, веб и веб-сборка мобильного приложения — поднимается одной командой и без какой-либо настройки. Нужен только Docker (на Windows — Docker Desktop с WSL 2).
+Нужен только Docker (на Windows — Docker Desktop с WSL 2), настраивать ничего не нужно.
 
-Без исходников, из готовых образов на [Docker Hub](https://hub.docker.com/r/offsya/todolistsenamasoft), в любой папке:
+### Готовый образ: Docker Desktop, без терминала
+
+На [Docker Hub](https://hub.docker.com/r/offsya/todolistsenamasoft) опубликован образ «всё в одном» `offsya/todolistsenamasoft` (тег `latest`): MongoDB, API, веб и веб-сборка мобильного приложения в одном контейнере.
+
+1. Откройте Docker Desktop. В поиске вверху окна найдите `offsya/todolistsenamasoft` и нажмите **Run** (тег `latest`).
+2. В окне запуска раскройте **Optional settings** и в поле **Host port** напротив `8080` впишите `8080`. Для мобильной веб-версии так же `8082`, для API, к которому обращается телефон, — `4000`.
+3. Нажмите **Run**. Когда контейнер станет healthy, откройте http://localhost:8080 или нажмите ссылку `8080:8080` в списке контейнеров.
+
+Кнопки Stop и Start сохраняют задачи и пользователей, новый контейнер начинает с пустой базы. То же самое из терминала:
 
 ```bash
-docker compose -f oci://docker.io/offsya/todolistsenamasoft:compose up -d
+docker run -d --name todolistsenamasoft -p 8080:8080 -p 8082:8082 -p 4000:4000 offsya/todolistsenamasoft
 ```
 
-Из исходников, в корне репозитория:
+### Из исходников
+
+В корне репозитория поднимается тот же стек, но каждая часть работает в своём контейнере:
 
 ```bash
 docker compose up -d --build
 ```
 
-Без терминала, через Docker Desktop: найдите в поиске `offsya/todolistsenamasoft`, нажмите **Run** (тег `latest`) и в **Optional settings** укажите Host port `8080` для порта `8080`. Это образ «всё в одном», подробности — в разделе [«Готовые образы»](#готовые-образы).
+Оба варианта занимают одни и те же порты, поэтому одновременно запускайте только один.
 
 | Адрес                 | Что там                                                                         |
 | --------------------- | ------------------------------------------------------------------------------- |
@@ -88,7 +98,7 @@ docker compose up -d --build
 npm run smoke
 ```
 
-Контейнеры называются `todoListSenamaSoft-mongo`, `-api`, `-web` и `-mobile-web`, проект Compose — `todolistsenamasoft` (Compose требует нижний регистр). Образы — `offsya/todolistsenamasoft:api`, `:web` и `:mobile-web`, они опубликованы на [Docker Hub](https://hub.docker.com/r/offsya/todolistsenamasoft) (см. [ниже](#готовые-образы)).
+Контейнеры называются `todoListSenamaSoft-mongo`, `-api`, `-web` и `-mobile-web`, проект Compose — `todolistsenamasoft` (Compose требует нижний регистр). Образы собираются локально и на Docker Hub не публикуются.
 
 - Веб и мобильная веб-сборка обращаются к API через встроенный nginx по тому же адресу (`/api`), поэтому CORS не нужен.
 - Наружу опубликован только nginx. Сам контейнер API закрыт: лимиты попыток входа доверяют заголовку `X-Forwarded-For` только от nginx, и прямой доступ позволил бы их обойти. Порт 4000 тоже обслуживает nginx.
@@ -102,56 +112,18 @@ npm run smoke
 docker compose down
 ```
 
-Стек, запущенный из Docker Hub, останавливается по имени проекта: `docker compose -p todolistsenamasoft down`.
+### Образ «всё в одном»
 
-### Готовые образы
+Кнопка **Run** в Docker Desktop умеет запускать только один образ, поэтому для неё собирается отдельный образ — цель `all-in-one` того же Dockerfile. В нём MongoDB, API и nginx работают рядом под `tini` ([`docker/all-in-one/start.sh`](docker/all-in-one/start.sh)) от непривилегированного пользователя, данные лежат в volume, а секрет для токенов генерируется так же, как в стеке выше. Несколько процессов в одном контейнере — осознанное отступление от правила «один процесс — один контейнер» ради запуска одной кнопкой. CI собирает этот образ и прогоняет по нему тот же smoke-тест.
 
-Запустить стек без исходников можно тремя способами:
-
-- одной командой из раздела выше: compose-файл опубликован на Docker Hub с тегом `compose`;
-- из папки [`deploy/`](deploy): в ней тот же `docker-compose.yml` и короткая инструкция, получатель копирует папку и выполняет `docker compose up -d`;
-- через Docker Desktop: кнопка **Run** умеет запускать только один образ, поэтому для неё есть образ «всё в одном» (`offsya/todolistsenamasoft:latest`, он же `:all-in-one`), пошагово — в [`deploy/README.md`](deploy/README.md).
-
-В опубликованном compose-файле намеренно нет переменных `${...}`: перед запуском опубликованного стека Compose просит подтвердить каждую переменную, и запуск перестал бы быть «просто командой».
-
-Образ «всё в одном» — цель `all-in-one` того же Dockerfile. В нём MongoDB, API и nginx работают рядом под `tini` ([`docker/all-in-one/start.sh`](docker/all-in-one/start.sh)) от непривилегированного пользователя, а данные лежат в volume. Несколько процессов в одном контейнере — осознанное отступление от правила «один процесс — один контейнер», ради запуска одной кнопкой. Основной способ — по-прежнему отдельные контейнеры. CI собирает этот образ и прогоняет по нему тот же smoke-тест.
-
-Обновить образы на Docker Hub после изменений (нужен `docker login` с доступом к `offsya`):
+Обновить образ на Docker Hub (нужен `docker login` с доступом к `offsya`):
 
 ```bash
-docker compose build
+docker build --target all-in-one -t offsya/todolistsenamasoft .
 ```
 
 ```bash
-docker compose push
-```
-
-Передать образы одним файлом, без Docker Hub. Образ `mongo:8` официальный и скачается у получателя сам:
-
-```bash
-docker save offsya/todolistsenamasoft:api offsya/todolistsenamasoft:web offsya/todolistsenamasoft:mobile-web -o todolistsenamasoft-images.tar
-```
-
-Получатель загружает архив командой `docker load -i todolistsenamasoft-images.tar` и запускает стек из папки `deploy/`.
-
-После изменений в `deploy/docker-compose.yml` его нужно опубликовать заново:
-
-```bash
-cd deploy && docker compose publish offsya/todolistsenamasoft:compose
-```
-
-Собрать и опубликовать образ «всё в одном»:
-
-```bash
-docker build --target all-in-one -t offsya/todolistsenamasoft:latest -t offsya/todolistsenamasoft:all-in-one .
-```
-
-```bash
-docker push offsya/todolistsenamasoft:latest
-```
-
-```bash
-docker push offsya/todolistsenamasoft:all-in-one
+docker push offsya/todolistsenamasoft
 ```
 
 ## Локальный запуск для разработки
