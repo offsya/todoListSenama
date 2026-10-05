@@ -45,6 +45,16 @@ export default defineConfig([
     },
   },
 
+  // Tests poke at untyped HTTP responses (`res.body` is `any`) and use asymmetric matchers.
+  {
+    files: ['**/*.test.{ts,tsx}', '**/test/**/*.{ts,tsx}'],
+    rules: {
+      '@typescript-eslint/no-unsafe-argument': 'off',
+      '@typescript-eslint/no-unsafe-assignment': 'off',
+      '@typescript-eslint/no-unsafe-member-access': 'off',
+    },
+  },
+
   // Node.js code: API server, shared package and tooling configs.
   {
     files: ['apps/server/**/*.ts', 'packages/shared/**/*.ts', '**/*.config.{js,cjs,mjs,ts}'],
