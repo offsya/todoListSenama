@@ -10,7 +10,7 @@
 
 ## Быстрый старт
 
-Нужен только Docker (на Windows — Docker Desktop), настраивать ничего не нужно:
+Нужен только Docker (на Windows — Docker Desktop). Настраивать ничего не нужно.
 
 ```bash
 git clone https://github.com/offsya/todoListSenama.git
@@ -20,13 +20,102 @@ git clone https://github.com/offsya/todoListSenama.git
 cd todoListSenama && docker compose up -d --build
 ```
 
-Первая сборка занимает несколько минут. Затем откройте http://localhost:8080 — веб-клиент; http://localhost:8082 — мобильное приложение в браузере; http://localhost:4000 — API. Мобильное приложение на телефоне через Expo Go, готовые образы с Docker Hub и команды внутри контейнеров — в разделе [Запуск в Docker](#запуск-в-docker).
+| Адрес                 | Что там                         |
+| --------------------- | ------------------------------- |
+| http://localhost:8080 | Веб-клиент                      |
+| http://localhost:8082 | Мобильное приложение в браузере |
+| http://localhost:4000 | API                             |
+
+Остановить (данные сохранятся):
+
+```bash
+docker compose stop
+```
+
+## Мобильное приложение на телефоне (Expo Go)
+
+Сначала запустите стек (см. выше). Телефон и компьютер должны быть в одной Wi-Fi-сети.
+
+**Windows** — дважды кликните [`scripts/start-expo.bat`](scripts/start-expo.bat). Скрипт сам найдёт адрес компьютера и покажет QR-код.
+
+**Любая система** — подставьте адрес компьютера в локальной сети:
+
+```bash
+EXPO_HOST=192.168.1.10 docker compose --profile expo up expo
+```
+
+Отсканируйте QR-код в Expo Go (Android) или камерой (iPhone). В окне работают клавиши Expo: `r` — перезагрузка, `j` — отладчик, `Ctrl+C` — выход. Если телефон не подключается, разрешите в брандмауэре входящие подключения на порты 8081 и 4000.
+
+## Запуск с Docker Hub без исходников
+
+**Windows** — дважды кликните [`scripts/start-todo.bat`](scripts/start-todo.bat).
+
+**Любая система:**
+
+```bash
+docker compose -f oci://docker.io/offsya/todolistsenamasoft:compose up -d
+```
+
+Expo-сервер для телефона без исходников:
+
+```bash
+docker run -it --rm -p 8081:8081 -e REACT_NATIVE_PACKAGER_HOSTNAME=192.168.1.10 offsya/todolistsenamasoft:expo
+```
+
+Образы: [offsya/todolistsenamasoft](https://hub.docker.com/r/offsya/todolistsenamasoft) — `:api`, `:web`, `:mobile-web`, `:expo`, а `:latest` — всё в одном контейнере для кнопки **Run** в Docker Desktop (порты 8080, 8082 и 4000 нужно указать в **Optional settings**).
+
+## Команды в Docker
+
+```bash
+docker compose logs -f
+```
+
+```bash
+docker exec -it todoListSenamaSoft-api sh
+```
+
+```bash
+docker exec -it todoListSenamaSoft-mongo mongosh todo-app
+```
+
+Тесты, типы и линтер мобильного приложения:
+
+```bash
+docker run --rm offsya/todolistsenamasoft:expo npm test
+```
+
+```bash
+docker run --rm offsya/todolistsenamasoft:expo npm run typecheck
+```
+
+```bash
+docker run --rm offsya/todolistsenamasoft:expo npm run lint
+```
+
+Проверка всего стека (нужен Node.js):
+
+```bash
+npm run smoke
+```
+
+Публикация образов (нужен `docker login` с доступом к `offsya`):
+
+```bash
+docker compose --profile expo build && docker compose --profile expo push
+```
+
+```bash
+cd deploy && docker compose publish offsya/todolistsenamasoft:compose
+```
+
+```bash
+docker build --target all-in-one -t offsya/todolistsenamasoft . && docker push offsya/todolistsenamasoft
+```
 
 ## Содержание
 
 - [Стек](#стек)
 - [Структура репозитория](#структура-репозитория)
-- [Запуск в Docker](#запуск-в-docker)
 - [Локальный запуск для разработки](#локальный-запуск-для-разработки)
 - [Мобильное приложение](#мобильное-приложение)
 - [API](#api)
@@ -71,162 +160,6 @@ graph LR
 ```
 
 Одни и те же zod-схемы проверяют запросы на сервере и формы в клиентах, а веб и мобилка используют одинаковые хуки. Приложения отличаются только платформенным UI.
-
-## Запуск в Docker
-
-Нужен только Docker (на Windows — Docker Desktop с WSL 2), настраивать ничего не нужно.
-
-### Готовые образы с Docker Hub
-
-На [Docker Hub](https://hub.docker.com/r/offsya/todolistsenamasoft) опубликованы образы `offsya/todolistsenamasoft:api`, `:web` и `:mobile-web` и описание стека `:compose`, которое связывает их с официальным `mongo:8`. Отдельно лежит `:expo` — dev-сервер Expo для телефона ([ниже](#мобильное-приложение-на-телефоне-expo-go)).
-
-На Windows достаточно дважды кликнуть [`scripts/start-todo.bat`](scripts/start-todo.bat). На любой системе то же самое делает одна команда:
-
-```bash
-docker compose -f oci://docker.io/offsya/todolistsenamasoft:compose up -d
-```
-
-Docker скачает все образы, поднимет четыре контейнера и откроет порты. Скрипт ещё дождётся готовности и откроет браузер. В Docker Desktop на вкладке **Containers** появится группа `todolistsenamasoft`: её можно развернуть и увидеть каждый контейнер с его образом и портами, а кнопки ▶ и ■ у группы запускают и останавливают всё сразу, данные сохраняются.
-
-Кнопка **Run** в Docker Desktop так не умеет: она всегда запускает один образ. Для неё есть образ «всё в одном» `offsya/todolistsenamasoft` (тег `latest`, подробности [ниже](#образ-всё-в-одном)). Найдите его в поиске, нажмите **Run** и в **Optional settings** впишите Host port `8080` напротив порта `8080` (так же `8082` и `4000`). Без этого шага порты не откроются: образ сам публиковать порты не может.
-
-### Из исходников
-
-В корне репозитория:
-
-```bash
-docker compose up -d --build
-```
-
-Оба способа занимают одни и те же порты, поэтому одновременно запускайте только один.
-
-| Адрес                 | Что там                                                                         |
-| --------------------- | ------------------------------------------------------------------------------- |
-| http://localhost:8080 | Веб-клиент                                                                      |
-| http://localhost:8082 | Мобильное приложение (веб-сборка Expo)                                          |
-| http://localhost:4000 | API через nginx — для мобильного приложения на телефоне или эмуляторе (Expo Go) |
-
-Проверить, что стек поднялся и основные требования выполняются (нужен Node.js; скрипт регистрирует двух тестовых пользователей):
-
-```bash
-npm run smoke
-```
-
-Контейнеры называются `todoListSenamaSoft-mongo`, `-api`, `-web` и `-mobile-web`, проект Compose — `todolistsenamasoft` (Compose требует нижний регистр).
-
-- Веб и мобильная веб-сборка обращаются к API через встроенный nginx по тому же адресу (`/api`), поэтому CORS не нужен.
-- Наружу опубликован только nginx. Сам контейнер API закрыт: лимиты попыток входа доверяют заголовку `X-Forwarded-For` только от nginx, и прямой доступ позволил бы их обойти. Порт 4000 тоже обслуживает nginx.
-- MongoDB работает без пароля. В стеке из исходников её порт открыт только на `127.0.0.1` — для `npm run dev` и инструментов вроде Compass, в стеке с Docker Hub не открыт вовсе.
-- nginx отдаёт страницы с Content-Security-Policy и запретом встраивания во фреймы. API работает в production-режиме от непривилегированного пользователя.
-- Секрет для подписи токенов можно не задавать. При первом запуске API генерирует случайный секрет и хранит его в volume `api-data`, поэтому у каждой установки он свой, а выданные токены переживают перезапуски. Свой `JWT_SECRET` и срок жизни токенов можно задать в `.env` (шаблон — `.env.example`).
-
-Остановить (данные сохранятся в volume): кнопка ■ у группы в Docker Desktop или
-
-```bash
-docker compose -p todolistsenamasoft stop
-```
-
-### Мобильное приложение на телефоне (Expo Go)
-
-Образ `offsya/todolistsenamasoft:expo` — dev-сервер Expo (Metro) с исходниками мобильного приложения. Телефон с Expo Go сканирует QR-код, получает JS-бандл с порта 8081 компьютера и ходит в API на порт 4000 того же компьютера. Телефон и компьютер должны быть в одной сети, а брандмауэр — пропускать входящие подключения к Docker на портах 8081 и 4000.
-
-Телефону нужен адрес компьютера в локальной сети, а изнутри контейнера его не узнать, поэтому адрес передаётся в переменной `REACT_NATIVE_PACKAGER_HOSTNAME`. На Windows всё делает двойной клик по [`scripts/start-expo.bat`](scripts/start-expo.bat): скрипт сам находит адрес, при необходимости поднимает стек с Docker Hub, скачивает свежий образ и запускает dev-сервер с QR-кодом в окне. Если адрес определился неверно (VPN, несколько сетевых карт), передайте его аргументом: `start-expo.bat 192.168.1.10`.
-
-На любой системе — сначала стек (как выше), затем dev-сервер, подставив свой адрес:
-
-```bash
-docker run -it --rm --name todoListSenamaSoft-expo -p 8081:8081 -e REACT_NATIVE_PACKAGER_HOSTNAME=192.168.1.10 offsya/todolistsenamasoft:expo
-```
-
-Из исходников то же самое:
-
-```bash
-EXPO_HOST=192.168.1.10 docker compose --profile expo up expo
-```
-
-В окне работают клавиши Expo: `r` — перезагрузить приложение, `j` — отладчик, `?` — все команды; `Ctrl+C` останавливает сервер. Expo Go должен поддерживать SDK 57.
-
-### Команды внутри контейнеров
-
-Логи всех контейнеров стека или одного:
-
-```bash
-docker compose -p todolistsenamasoft logs -f
-```
-
-```bash
-docker logs -f todoListSenamaSoft-api
-```
-
-Оболочка внутри контейнера API (Alpine, `sh`):
-
-```bash
-docker exec -it todoListSenamaSoft-api sh
-```
-
-База данных в `mongosh` — например, `db.users.find()` или `db.todos.countDocuments()`:
-
-```bash
-docker exec -it todoListSenamaSoft-mongo mongosh todo-app
-```
-
-Запрос к API с компьютера:
-
-```bash
-curl http://localhost:4000/health
-```
-
-Тесты, проверка типов и линтер мобильного приложения прямо в образе Expo — исходники и все зависимости уже внутри:
-
-```bash
-docker run --rm offsya/todolistsenamasoft:expo npm test
-```
-
-```bash
-docker run --rm offsya/todolistsenamasoft:expo npm run typecheck
-```
-
-```bash
-docker run --rm offsya/todolistsenamasoft:expo npm run lint
-```
-
-Оболочка в образе Expo — для любых других команд (`npx expo-doctor`, `npx expo export` и т. п.):
-
-```bash
-docker run -it --rm offsya/todolistsenamasoft:expo sh
-```
-
-### Образ «всё в одном»
-
-Кнопка **Run** в Docker Desktop запускает только один образ, поэтому для неё собирается отдельный образ — цель `all-in-one` того же Dockerfile. Он собран на чистом Ubuntu, из образа MongoDB взят только `mongod` (около 580 МБ вместо 1,4 ГБ). MongoDB, API и nginx работают рядом под `tini` ([`docker/all-in-one/start.sh`](docker/all-in-one/start.sh)) от непривилегированного пользователя, данные лежат в volume, а секрет для токенов генерируется так же, как в стеке выше. В консоль контейнера скрипт пишет короткие шаги запуска и итоговое `Ready`, подробный лог MongoDB уходит в файл. Несколько процессов в одном контейнере — осознанное отступление от правила «один процесс — один контейнер» ради запуска одной кнопкой. CI собирает этот образ и прогоняет по нему тот же smoke-тест.
-
-### Публикация на Docker Hub
-
-Нужен `docker login` с доступом к `offsya`. Образы стека и dev-сервера Expo — из корня репозитория:
-
-```bash
-docker compose --profile expo build
-```
-
-```bash
-docker compose --profile expo push
-```
-
-Описание стека, если менялся [`deploy/docker-compose.yml`](deploy/docker-compose.yml) (переменных `${...}` в нём нет намеренно: для опубликованных стеков Compose просит подтвердить каждую):
-
-```bash
-cd deploy && docker compose publish offsya/todolistsenamasoft:compose
-```
-
-Образ «всё в одном»:
-
-```bash
-docker build --target all-in-one -t offsya/todolistsenamasoft .
-```
-
-```bash
-docker push offsya/todolistsenamasoft
-```
 
 ## Локальный запуск для разработки
 
