@@ -7,8 +7,10 @@
 #   http://localhost:4000   API (for the mobile app on a phone or emulator)
 #
 # Publish after a change:  docker compose publish offsya/todolistsenamasoft:compose  (from deploy/)
-# The same stack built from source is ../docker-compose.yml; keep the two in sync. This file has
-# no ${VARIABLES} on purpose: Compose asks to confirm them when it runs a published stack.
+# The same stack built from source is ../docker-compose.yml; keep the two in sync. Its expo
+# service is left out: it needs this computer's address, and this file has no ${VARIABLES} on
+# purpose (Compose asks to confirm them when it runs a published stack). scripts/start-expo.bat
+# runs offsya/todolistsenamasoft:expo instead.
 name: todolistsenamasoft
 
 services:

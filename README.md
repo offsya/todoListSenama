@@ -64,7 +64,7 @@ graph LR
 
 ### Готовые образы с Docker Hub
 
-На [Docker Hub](https://hub.docker.com/r/offsya/todolistsenamasoft) опубликованы образы `offsya/todolistsenamasoft:api`, `:web` и `:mobile-web` и описание стека `:compose`, которое связывает их с официальным `mongo:8`.
+На [Docker Hub](https://hub.docker.com/r/offsya/todolistsenamasoft) опубликованы образы `offsya/todolistsenamasoft:api`, `:web` и `:mobile-web` и описание стека `:compose`, которое связывает их с официальным `mongo:8`. Отдельно лежит `:expo` — dev-сервер Expo для телефона ([ниже](#мобильное-приложение-на-телефоне-expo-go)).
 
 На Windows достаточно дважды кликнуть [`scripts/start-todo.bat`](scripts/start-todo.bat). На любой системе то же самое делает одна команда:
 
@@ -112,20 +112,90 @@ npm run smoke
 docker compose -p todolistsenamasoft stop
 ```
 
+### Мобильное приложение на телефоне (Expo Go)
+
+Образ `offsya/todolistsenamasoft:expo` — dev-сервер Expo (Metro) с исходниками мобильного приложения. Телефон с Expo Go сканирует QR-код, получает JS-бандл с порта 8081 компьютера и ходит в API на порт 4000 того же компьютера. Телефон и компьютер должны быть в одной сети, а брандмауэр — пропускать входящие подключения к Docker на портах 8081 и 4000.
+
+Телефону нужен адрес компьютера в локальной сети, а изнутри контейнера его не узнать, поэтому адрес передаётся в переменной `REACT_NATIVE_PACKAGER_HOSTNAME`. На Windows всё делает двойной клик по [`scripts/start-expo.bat`](scripts/start-expo.bat): скрипт сам находит адрес, при необходимости поднимает стек с Docker Hub, скачивает свежий образ и запускает dev-сервер с QR-кодом в окне. Если адрес определился неверно (VPN, несколько сетевых карт), передайте его аргументом: `start-expo.bat 192.168.1.10`.
+
+На любой системе — сначала стек (как выше), затем dev-сервер, подставив свой адрес:
+
+```bash
+docker run -it --rm --name todoListSenamaSoft-expo -p 8081:8081 -e REACT_NATIVE_PACKAGER_HOSTNAME=192.168.1.10 offsya/todolistsenamasoft:expo
+```
+
+Из исходников то же самое:
+
+```bash
+EXPO_HOST=192.168.1.10 docker compose --profile expo up expo
+```
+
+В окне работают клавиши Expo: `r` — перезагрузить приложение, `j` — отладчик, `?` — все команды; `Ctrl+C` останавливает сервер. Expo Go должен поддерживать SDK 57.
+
+### Команды внутри контейнеров
+
+Логи всех контейнеров стека или одного:
+
+```bash
+docker compose -p todolistsenamasoft logs -f
+```
+
+```bash
+docker logs -f todoListSenamaSoft-api
+```
+
+Оболочка внутри контейнера API (Alpine, `sh`):
+
+```bash
+docker exec -it todoListSenamaSoft-api sh
+```
+
+База данных в `mongosh` — например, `db.users.find()` или `db.todos.countDocuments()`:
+
+```bash
+docker exec -it todoListSenamaSoft-mongo mongosh todo-app
+```
+
+Запрос к API с компьютера:
+
+```bash
+curl http://localhost:4000/health
+```
+
+Тесты, проверка типов и линтер мобильного приложения прямо в образе Expo — исходники и все зависимости уже внутри:
+
+```bash
+docker run --rm offsya/todolistsenamasoft:expo npm test
+```
+
+```bash
+docker run --rm offsya/todolistsenamasoft:expo npm run typecheck
+```
+
+```bash
+docker run --rm offsya/todolistsenamasoft:expo npm run lint
+```
+
+Оболочка в образе Expo — для любых других команд (`npx expo-doctor`, `npx expo export` и т. п.):
+
+```bash
+docker run -it --rm offsya/todolistsenamasoft:expo sh
+```
+
 ### Образ «всё в одном»
 
 Кнопка **Run** в Docker Desktop запускает только один образ, поэтому для неё собирается отдельный образ — цель `all-in-one` того же Dockerfile. Он собран на чистом Ubuntu, из образа MongoDB взят только `mongod` (около 580 МБ вместо 1,4 ГБ). MongoDB, API и nginx работают рядом под `tini` ([`docker/all-in-one/start.sh`](docker/all-in-one/start.sh)) от непривилегированного пользователя, данные лежат в volume, а секрет для токенов генерируется так же, как в стеке выше. В консоль контейнера скрипт пишет короткие шаги запуска и итоговое `Ready`, подробный лог MongoDB уходит в файл. Несколько процессов в одном контейнере — осознанное отступление от правила «один процесс — один контейнер» ради запуска одной кнопкой. CI собирает этот образ и прогоняет по нему тот же smoke-тест.
 
 ### Публикация на Docker Hub
 
-Нужен `docker login` с доступом к `offsya`. Образы стека — из корня репозитория:
+Нужен `docker login` с доступом к `offsya`. Образы стека и dev-сервера Expo — из корня репозитория:
 
 ```bash
-docker compose build
+docker compose --profile expo build
 ```
 
 ```bash
-docker compose push
+docker compose --profile expo push
 ```
 
 Описание стека, если менялся [`deploy/docker-compose.yml`](deploy/docker-compose.yml) (переменных `${...}` в нём нет намеренно: для опубликованных стеков Compose просит подтвердить каждую):

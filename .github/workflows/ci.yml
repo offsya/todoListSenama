@@ -93,14 +93,29 @@ jobs:
       - name: Smoke test the all-in-one image
         run: npm run smoke
 
+      # The Expo dev server for Expo Go: the manifest must point the phone at the given address.
+      - name: Build and start the Expo dev server image
+        run: |
+          docker build --target expo -t todolistsenamasoft:expo .
+          docker run -d --name expo -p 8081:8081 -e REACT_NATIVE_PACKAGER_HOSTNAME=192.0.2.10 \
+            todolistsenamasoft:expo
+          timeout 180 sh -c \
+            'until [ "$(docker inspect -f "{{.State.Health.Status}}" expo)" = healthy ]; do sleep 2; done'
+          curl -fsS -H 'expo-platform: android' -H 'Accept: application/expo+json' \
+            http://localhost:8081 | grep -q '"hostUri":"192.0.2.10:8081"'
+
+      - name: Mobile tests in the Expo image
+        run: docker run --rm todolistsenamasoft:expo npm test
+
       - name: Container logs
         if: failure()
         run: |
           docker compose logs
           docker logs all-in-one || true
+          docker logs expo || true
 
       - name: Clean up
         if: always()
         run: |
-          docker rm -fv all-in-one || true
+          docker rm -fv all-in-one expo || true
           docker compose down -v
