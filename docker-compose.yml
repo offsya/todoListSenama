@@ -9,7 +9,7 @@
 # Only MongoDB, for local development with `npm run dev`:  docker compose up -d mongo
 #
 # The images are named after the Docker Hub repository; publish an update with
-#   docker compose build && docker compose push
+#   docker compose --profile expo build && docker compose --profile expo push
 # deploy/docker-compose.yml runs them from Docker Hub without the source code; keep the two in sync.
 #
 # Compose project and image names must be lowercase; containers keep the project's name.
@@ -83,6 +83,28 @@ services:
       - '8082:80'
     depends_on:
       api:
+        condition: service_healthy
+
+  # Expo dev server for Expo Go on a phone; not part of `up` (profile), started with
+  #   EXPO_HOST=192.168.1.10 docker compose --profile expo up expo
+  # where EXPO_HOST is this computer's LAN address. The app calls the API on port 4000 of the same
+  # address. From Docker Hub, scripts/start-expo.bat does the same without the source code.
+  expo:
+    build:
+      context: .
+      target: expo
+    image: offsya/todolistsenamasoft:expo
+    container_name: todoListSenamaSoft-expo
+    profiles: [expo]
+    environment:
+      REACT_NATIVE_PACKAGER_HOSTNAME: ${EXPO_HOST:-}
+    ports:
+      - '8081:8081'
+    # Expo's keyboard shortcuts (r reloads, j opens the debugger) after `docker attach`.
+    stdin_open: true
+    tty: true
+    depends_on:
+      web:
         condition: service_healthy
 
 volumes:

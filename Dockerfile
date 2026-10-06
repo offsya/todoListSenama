@@ -5,6 +5,7 @@
 #   web         React web app served by nginx, which also proxies /api to the API and
 #               publishes the API on port 4000
 #   mobile-web  Web build of the Expo app, served the same way
+#   expo        Expo dev server for Expo Go on a phone (started on its own, see the target)
 #   all-in-one  All of the above plus MongoDB in a single container, for Docker Desktop's
 #               "Run" button (published as offsya/todolistsenamasoft:latest)
 
@@ -96,6 +97,28 @@ RUN cd apps/mobile && npx expo export --platform web --output-dir dist-web
 FROM spa AS mobile-web
 COPY docker/nginx/csp-mobile-web.conf /etc/nginx/csp.conf
 COPY --from=mobile-web-build /app/apps/mobile/dist-web /usr/share/nginx/html
+
+# ---- Mobile app, Expo dev server -----------------------------------------------------------
+# Metro for Expo Go on a phone (published as offsya/todolistsenamasoft:expo). The phone needs
+# the computer's LAN address in REACT_NATIVE_PACKAGER_HOSTNAME, which a container cannot find
+# out: scripts/start-expo.bat passes it. The sources and all dependencies are inside, so the
+# image also runs the mobile app's tests, type check and lint (`docker run ... npm test`).
+FROM ${NODE_IMAGE} AS expo
+# No NODE_ENV: Expo picks development itself, and Jest sets "test" only when it is unset.
+ENV EXPO_NO_TELEMETRY=1 NPM_CONFIG_UPDATE_NOTIFIER=false
+WORKDIR /app
+RUN chown node:node /app
+# Owned by the non-root user: Expo writes .expo/ and the npm scripts rebuild the packages.
+COPY --chown=node:node --from=packages /app ./
+COPY --chown=node:node eslint.config.js ./
+COPY --chown=node:node apps/mobile apps/mobile
+COPY --chmod=755 docker/expo/start.sh /usr/local/bin/start-expo
+USER node
+WORKDIR /app/apps/mobile
+EXPOSE 8081
+HEALTHCHECK --interval=10s --timeout=3s --start-period=60s --start-interval=2s --retries=3 \
+  CMD node -e "fetch('http://127.0.0.1:8081/status').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"
+CMD ["start-expo"]
 
 # ---- Everything in one container -----------------------------------------------------------
 # Docker Desktop's "Run" button starts a single image, so this one runs MongoDB, the API and
