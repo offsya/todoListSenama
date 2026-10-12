@@ -1,8 +1,8 @@
 import { formatDueDate, isOverdue, useTodoTextEditor } from '@todo/client';
-import { TODO_TEXT_MAX_LENGTH, type Todo } from '@todo/shared';
+import { TODO_TEXT_MAX_LENGTH, type Todo, type TodoAttachment } from '@todo/shared';
 import { useEffect, useId, useRef, useState } from 'react';
 import { Button } from '../../components/Button';
-import { PencilIcon, TrashIcon } from '../../components/icons';
+import { DownloadIcon, PaperclipIcon, PencilIcon, TrashIcon } from '../../components/icons';
 import { NEW_TODO_INPUT_ID } from './NewTodoForm';
 import styles from './TodoItem.module.css';
 
@@ -13,6 +13,10 @@ interface TodoItemProps {
   onToggle: (completed: boolean) => void;
   onRename: (text: string) => void;
   onDelete: () => void;
+  onAttach: (file: File) => void;
+  onDownload: () => void;
+  /** The file is being uploaded. */
+  attaching?: boolean;
 }
 
 export function TodoItem({
@@ -21,7 +25,11 @@ export function TodoItem({
   onToggle,
   onRename,
   onDelete,
+  onAttach,
+  onDownload,
+  attaching = false,
 }: TodoItemProps) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [isEditing, setIsEditing] = useState(false);
   const itemRef = useRef<HTMLLIElement>(null);
   const editButtonRef = useRef<HTMLButtonElement>(null);
@@ -89,8 +97,31 @@ export function TodoItem({
               {todo.text}
             </span>
             {todo.dueDate && <DueDate dueDate={todo.dueDate} overdue={isOverdue(todo)} />}
+            {todo.attachment && (
+              <AttachmentLink attachment={todo.attachment} onDownload={onDownload} />
+            )}
           </div>
           <div className={styles.actions}>
+            <input
+              ref={fileInputRef}
+              type="file"
+              hidden
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                // Reset, so picking the same file again still fires a change.
+                event.target.value = '';
+                if (file) onAttach(file);
+              }}
+            />
+            <Button
+              variant="icon"
+              aria-label={`${todo.attachment ? 'Replace the file of' : 'Attach a file to'} "${todo.text}"`}
+              title={todo.attachment ? 'Replace file' : 'Attach file'}
+              loading={attaching}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              {!attaching && <PaperclipIcon />}
+            </Button>
             <Button
               ref={editButtonRef}
               variant="icon"
@@ -107,6 +138,33 @@ export function TodoItem({
       )}
     </li>
   );
+}
+
+function AttachmentLink({
+  attachment,
+  onDownload,
+}: {
+  attachment: TodoAttachment;
+  onDownload: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      className={styles.attachment}
+      onClick={onDownload}
+      title={`Download ${attachment.name}`}
+    >
+      <DownloadIcon width={14} height={14} />
+      <span className={styles.attachmentName}>{attachment.name}</span>
+      <span className={styles.attachmentSize}>{formatSize(attachment.size)}</span>
+    </button>
+  );
+}
+
+function formatSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
 function DueDate({ dueDate, overdue }: { dueDate: string; overdue: boolean }) {

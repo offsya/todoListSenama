@@ -1,6 +1,6 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import { http } from 'msw/http';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Session } from '@todo/client';
 import {
   API_URL,
@@ -10,6 +10,7 @@ import {
   seedTodo,
   seedUser,
   server,
+  storedFile,
 } from '../../test/api-mock';
 import { renderApp } from '../../test/render';
 
@@ -318,5 +319,57 @@ describe('TodosPage', () => {
 
     expect(screen.queryByRole('checkbox', { name: 'First' })).not.toBeInTheDocument();
     expect(screen.getByRole('checkbox', { name: 'Second' })).toHaveFocus();
+  });
+
+  describe('attachments', () => {
+    const fileInput = () => document.querySelector<HTMLInputElement>('input[type="file"]')!;
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('attaches a file and downloads it with the token', async () => {
+      seedTodo(session, 'Pay the bill');
+      const { user } = renderApp('/', { session });
+      await screen.findByText('Pay the bill');
+
+      const invoice = new File(['Invoice #42'], 'invoice.txt', { type: 'text/plain' });
+      await user.upload(fileInput(), invoice);
+
+      const link = await screen.findByRole('button', { name: /invoice\.txt/ });
+      expect(link).toHaveTextContent('11 B');
+      expect(await storedFile(findStoredTodo('Pay the bill')!.id)?.text()).toBe('Invoice #42');
+      expect(
+        screen.getByRole('button', { name: 'Replace the file of "Pay the bill"' }),
+      ).toBeInTheDocument();
+
+      const createObjectURL = vi.fn((_blob: Blob) => 'blob:invoice');
+      URL.createObjectURL = createObjectURL;
+      URL.revokeObjectURL = vi.fn();
+      const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+
+      await user.click(link);
+
+      await waitFor(() => expect(click).toHaveBeenCalledOnce());
+      const anchor = click.mock.contexts[0] as HTMLAnchorElement;
+      expect(anchor.download).toBe('invoice.txt');
+      expect(anchor.href).toBe('blob:invoice');
+      expect(await createObjectURL.mock.calls[0]![0].text()).toBe('Invoice #42');
+      expect(apiRequests()).toContain(
+        `GET /todos/${findStoredTodo('Pay the bill')!.id}/attachment`,
+      );
+    });
+
+    it('refuses files over 5 MB without uploading them', async () => {
+      seedTodo(session, 'Pay the bill');
+      const { user } = renderApp('/', { session });
+      await screen.findByText('Pay the bill');
+
+      const huge = new File([new Uint8Array(5 * 1024 * 1024 + 1)], 'huge.bin');
+      await user.upload(fileInput(), huge);
+
+      expect(await screen.findByRole('alert')).toHaveTextContent('"huge.bin" is larger than 5 MB.');
+      expect(apiRequests().some((request) => request.startsWith('POST /todos/'))).toBe(false);
+    });
   });
 });

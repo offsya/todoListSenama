@@ -269,3 +269,34 @@ export function useDeleteTodo({ onError }: TodoMutationOptions = {}) {
     onSettled: (_result, _error, _id, context) => context?.cache.syncAfterLastMutation(),
   });
 }
+
+export interface UploadAttachmentVariables {
+  id: string;
+  /** Carries the file in the `ATTACHMENT_FIELD` field. */
+  form: FormData;
+}
+
+/** Attaches a file to a todo, replacing the previous one. Not optimistic: it shows when stored. */
+export function useUploadAttachment({ onError }: TodoMutationOptions = {}) {
+  const { api } = useTodoClient();
+  const todos = useTodosCache();
+
+  return useMutation({
+    mutationKey: TODO_MUTATION_KEY,
+    mutationFn: ({ id, form }: UploadAttachmentVariables) => api.todos.uploadAttachment(id, form),
+    onMutate: () => ({ cache: todos.pin() }),
+    onSuccess: async (updated, _variables, { cache }) => {
+      await cache.cancelFetches();
+      cache.update((page) => ({
+        ...page,
+        items: page.items.map((todo) =>
+          todo.id === updated.id ? { ...todo, attachment: updated.attachment } : todo,
+        ),
+      }));
+    },
+    onError: (error, _variables, context) => {
+      if (todos.isCurrent(context?.cache)) onError?.(error);
+    },
+    onSettled: (_todo, _error, _variables, context) => context?.cache.syncAfterLastMutation(),
+  });
+}

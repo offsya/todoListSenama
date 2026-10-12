@@ -7,6 +7,7 @@ const todo: Todo = {
   text: 'Buy milk',
   completed: false,
   dueDate: null,
+  attachment: null,
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z',
 };
@@ -17,6 +18,8 @@ async function setup(overrides: Partial<Todo> = {}) {
     onToggle: jest.fn(),
     onRename: jest.fn(),
     onDelete: jest.fn(),
+    onAttach: jest.fn(),
+    onOpenAttachment: jest.fn(),
   };
   await render(<TodoItem {...props} />);
   return props;
@@ -82,5 +85,32 @@ describe('TodoItem', () => {
     await fireEvent.press(screen.getByRole('button', { name: 'Delete "Buy milk"' }));
 
     expect(onDelete).toHaveBeenCalledWith(shown);
+  });
+
+  it('attaches a file', async () => {
+    const { onAttach, todo: shown } = await setup();
+
+    await fireEvent.press(screen.getByRole('button', { name: 'Attach a file to "Buy milk"' }));
+
+    expect(onAttach).toHaveBeenCalledWith(shown);
+  });
+
+  it('shows the attached file and opens it', async () => {
+    const attachment = { name: 'invoice.pdf', size: 2048, contentType: 'application/pdf' };
+    const { onOpenAttachment, todo: shown } = await setup({ attachment });
+
+    expect(screen.getByText('2 KB')).toBeOnTheScreen();
+    expect(
+      screen.getByRole('button', { name: 'Replace the file of "Buy milk"' }),
+    ).toBeOnTheScreen();
+    await fireEvent.press(screen.getByRole('button', { name: 'Open invoice.pdf' }));
+
+    expect(onOpenAttachment).toHaveBeenCalledWith(shown);
+  });
+
+  it('shows the due date and marks an overdue todo', async () => {
+    await setup({ dueDate: '2020-01-01T00:00:00.000Z' });
+
+    expect(screen.getByText('Overdue · Jan 1, 2020')).toBeOnTheScreen();
   });
 });

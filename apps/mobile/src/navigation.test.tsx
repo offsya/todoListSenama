@@ -21,6 +21,7 @@ const makeTodo = (id: string, text: string, fields: Partial<Todo> = {}): Todo =>
   text,
   completed: false,
   dueDate: null,
+  attachment: null,
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z',
   ...fields,

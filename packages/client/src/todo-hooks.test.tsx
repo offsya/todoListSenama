@@ -12,6 +12,7 @@ import {
   useTodoList,
   useTodos,
   useUpdateTodo,
+  useUploadAttachment,
   type TodosQuery,
 } from './todo-hooks.js';
 
@@ -20,6 +21,7 @@ const makeTodo = (id: string, text: string, fields: Partial<Todo> = {}): Todo =>
   text,
   completed: false,
   dueDate: null,
+  attachment: null,
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z',
   ...fields,
@@ -414,5 +416,43 @@ describe('useCreateTodo', () => {
     // The list is fetched again instead of showing a "complete" list with just one todo.
     await waitFor(() => expect(list).toHaveBeenCalledTimes(2));
     expect(queryClient.getQueryData(['todos', 'u1', ALL])).toBeUndefined();
+  });
+});
+
+describe('useUploadAttachment', () => {
+  it('shows the attachment once it is stored and resyncs', async () => {
+    const attachment = { name: 'invoice.pdf', size: 1024, contentType: 'application/pdf' };
+    const uploadAttachment = vi.fn(() => Promise.resolve({ ...a, attachment }));
+    const { list, wrapper } = setup([a, b], { uploadAttachment });
+    const { result } = renderHook(() => ({ todos: useTodos(ALL), upload: useUploadAttachment() }), {
+      wrapper,
+    });
+    await waitFor(() => expect(items(result.current.todos.data)).toEqual([a, b]));
+    const form = new FormData();
+
+    act(() => result.current.upload.mutate({ id: 'a', form }));
+
+    await waitFor(() =>
+      expect(result.current.todos.data?.items[0]?.attachment).toEqual(attachment),
+    );
+    expect(uploadAttachment).toHaveBeenCalledWith('a', form);
+    expect(result.current.todos.data?.items[1]).toEqual(b);
+    await waitFor(() => expect(list).toHaveBeenCalledTimes(2));
+  });
+
+  it('reports a failed upload', async () => {
+    const uploadAttachment = vi.fn(() => Promise.reject(serverError()));
+    const onError = vi.fn();
+    const { wrapper } = setup([a], { uploadAttachment });
+    const { result } = renderHook(
+      () => ({ todos: useTodos(ALL), upload: useUploadAttachment({ onError }) }),
+      { wrapper },
+    );
+    await waitFor(() => expect(items(result.current.todos.data)).toEqual([a]));
+
+    act(() => result.current.upload.mutate({ id: 'a', form: new FormData() }));
+
+    await waitFor(() => expect(onError).toHaveBeenCalledOnce());
+    expect(items(result.current.todos.data)).toEqual([a]);
   });
 });

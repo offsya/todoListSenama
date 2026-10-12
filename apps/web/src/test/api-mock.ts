@@ -1,5 +1,6 @@
 import { getTodoFilter } from '@todo/client';
 import {
+  ATTACHMENT_FIELD,
   createTodoSchema,
   listTodosQuerySchema,
   loginSchema,
@@ -36,6 +37,7 @@ interface StoredTodo extends Todo {
 const db = {
   users: [] as StoredUser[],
   todos: [] as StoredTodo[],
+  files: new Map<string, File>(),
   requests: [] as string[],
   sequence: 0,
 };
@@ -43,6 +45,7 @@ const db = {
 export function resetApiMock() {
   db.users = [];
   db.todos = [];
+  db.files = new Map();
   db.requests = [];
   db.sequence = 0;
 }
@@ -100,6 +103,7 @@ export function seedTodo(
     text,
     completed,
     dueDate,
+    attachment: null,
     createdAt: now(),
     updatedAt: now(),
     ownerId: owner.user.id,
@@ -107,6 +111,9 @@ export function seedTodo(
   db.todos.unshift(todo);
   return toTodo(todo);
 }
+
+/** The file stored for a todo, as the fake API received it. */
+export const storedFile = (todoId: string) => db.files.get(todoId);
 
 export const findStoredTodo = (text: string) => db.todos.find((todo) => todo.text === text);
 
@@ -167,6 +174,7 @@ const handlers = [
       text: input.data.text,
       completed: false,
       dueDate: input.data.dueDate ?? null,
+      attachment: null,
       createdAt: now(),
       updatedAt: now(),
       ownerId: user.id,
@@ -193,6 +201,27 @@ const handlers = [
     if (index === -1) return notFound();
     db.todos.splice(index, 1);
     return new HttpResponse(null, { status: 204 });
+  }),
+
+  http.post(`${API_URL}/todos/:id/attachment`, async ({ request, params }) => {
+    const user = authenticate(request);
+    if (!user) return unauthorized();
+    const todo = db.todos.find((item) => item.id === params.id && item.ownerId === user.id);
+    if (!todo) return notFound();
+    const file = (await request.formData()).get(ATTACHMENT_FIELD);
+    if (!(file instanceof File)) return apiError(400, 'BAD_REQUEST', 'Send one file');
+    db.files.set(todo.id, file);
+    todo.attachment = { name: file.name, size: file.size, contentType: file.type };
+    return HttpResponse.json(toTodo(todo));
+  }),
+
+  http.get(`${API_URL}/todos/:id/attachment`, ({ request, params }) => {
+    const user = authenticate(request);
+    if (!user) return unauthorized();
+    const todo = db.todos.find((item) => item.id === params.id && item.ownerId === user.id);
+    const file = todo && db.files.get(todo.id);
+    if (!file) return notFound();
+    return new HttpResponse(file, { headers: { 'Content-Type': file.type } });
   }),
 ];
 
