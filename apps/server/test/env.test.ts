@@ -10,7 +10,7 @@ describe('parseEnv', () => {
     expect(env).toMatchObject({
       NODE_ENV: 'development',
       PORT: 4000,
-      JWT_EXPIRES_IN: '7d',
+      JWT_EXPIRES_IN: '15m',
       PASSWORD_HASH_COST: 15,
       CORS_ORIGIN: ['http://localhost:5173', 'http://localhost:8081'],
     });

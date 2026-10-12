@@ -30,7 +30,8 @@ const envSchema = z
     JWT_EXPIRES_IN: z
       .string()
       .regex(/^\d+[smhd]$/, 'Use a duration like 15m, 12h or 7d')
-      .default('7d'),
+      // Short-lived: there are no refresh tokens, so a leaked token is only good for 15 minutes.
+      .default('15m'),
     /** log2 of the scrypt CPU/memory cost: 15 means N = 32768 (32 MiB, ~0.2 s per hash). */
     PASSWORD_HASH_COST: z.coerce.number().int().min(10).max(20).default(15),
     /** Max login/registration attempts per IP and endpoint within the 15-minute window. */

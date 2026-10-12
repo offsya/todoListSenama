@@ -1,6 +1,7 @@
 import { screen } from '@testing-library/react';
+import { http } from 'msw/http';
 import { describe, expect, it } from 'vitest';
-import { apiRequests, seedTodo, seedUser } from '../test/api-mock';
+import { API_URL, apiError, apiRequests, seedTodo, seedUser, server } from '../test/api-mock';
 import { renderApp } from '../test/render';
 import { sessionStore } from '../lib/session';
 
@@ -125,6 +126,23 @@ describe('session', () => {
 
     expect(await loginHeading()).toBeInTheDocument();
     expect(sessionStore.getState().session).toBeNull();
+  });
+
+  it('returns to the login page when the token expires while the list is open', async () => {
+    const session = seedUser();
+    seedTodo(session, 'Buy milk');
+    const { user } = renderApp('/', { session });
+    const checkbox = await screen.findByRole('checkbox', { name: 'Buy milk' });
+    // 15 minutes later the API no longer accepts the token.
+    server.use(
+      http.put(`${API_URL}/todos/:id`, () => apiError(401, 'UNAUTHORIZED', 'Token has expired')),
+    );
+
+    await user.click(checkbox);
+
+    expect(await loginHeading()).toBeInTheDocument();
+    expect(screen.queryByText('Loading todos')).not.toBeInTheDocument();
+    expect(localStorage.length).toBe(0);
   });
 
   it('signs out when another tab signs out', async () => {
