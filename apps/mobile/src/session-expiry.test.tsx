@@ -1,5 +1,5 @@
 import type { AuthResponse } from '@todo/shared';
-import { renderRouter, screen } from 'expo-router/testing-library';
+import { fireEvent, renderRouter, screen } from 'expo-router/testing-library';
 import { queryClient } from './lib/query-client';
 import { sessionStore } from './lib/session';
 
@@ -59,4 +59,40 @@ it('returns to the sign-in screen when the API rejects the stored token', async 
       headers: expect.objectContaining({ Authorization: 'Bearer expired-token' }),
     }),
   );
+});
+
+it('returns to the sign-in screen when the token expires while the list is open', async () => {
+  const page = {
+    items: [
+      {
+        id: 't1',
+        text: 'Buy milk',
+        completed: false,
+        dueDate: null,
+        attachment: null,
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+      },
+    ],
+    page: 1,
+    limit: 10,
+    total: 1,
+    totalPages: 1,
+  };
+  fetchMock.mockImplementation((_url: string, init: { method: string }) =>
+    Promise.resolve(
+      init.method === 'GET'
+        ? jsonResponse(200, page)
+        : jsonResponse(401, { error: { code: 'UNAUTHORIZED', message: 'Token has expired' } }),
+    ),
+  );
+  sessionStore.set(expiredSession);
+  const app = renderRouter('./src/app', { initialUrl: '/' });
+  await app;
+
+  await fireEvent.press(await screen.findByRole('checkbox', { name: 'Buy milk' }));
+
+  expect(await screen.findByText('Welcome back')).toBeOnTheScreen();
+  expect(app.getPathname()).toBe('/sign-in');
+  expect(sessionStore.getState().session).toBeNull();
 });

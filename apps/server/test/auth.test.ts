@@ -109,6 +109,8 @@ describe('POST /auth/login', () => {
     const payload = jwt.verify(res.body.token, env.JWT_SECRET) as jwt.JwtPayload;
     expect(payload.sub).toBe(user.id);
     expect(payload.exp).toBeGreaterThan(Date.now() / 1000);
+    // Valid for 15 minutes.
+    expect(payload.exp! - payload.iat!).toBe(15 * 60);
 
     // The token unlocks the todo list.
     await asUser(res.body).get('/todos').expect(200);

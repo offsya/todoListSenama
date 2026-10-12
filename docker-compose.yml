@@ -45,7 +45,7 @@ services:
       MONGODB_URI: mongodb://mongo:27017/todo-app
       # Unset: the API generates a random secret on the first start and keeps it in api-data.
       JWT_SECRET: ${JWT_SECRET:-}
-      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-15m}
       # Every request comes through nginx, which sets X-Forwarded-For; rate limiting must see
       # client IPs.
       TRUST_PROXY: 1
