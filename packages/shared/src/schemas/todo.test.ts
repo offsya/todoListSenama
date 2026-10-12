@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { createTodoSchema, TODO_TEXT_MAX_LENGTH, updateTodoSchema } from './todo.js';
+import {
+  createTodoSchema,
+  listTodosQuerySchema,
+  TODO_TEXT_MAX_LENGTH,
+  updateTodoSchema,
+} from './todo.js';
 
 describe('createTodoSchema', () => {
   it('trims the text', () => {
@@ -37,7 +42,7 @@ describe('updateTodoSchema', () => {
 
     expect(result.success).toBe(false);
     expect(result.error?.issues[0]?.message).toBe(
-      'Provide at least one field to update: text or completed',
+      'Provide at least one field to update: text, completed or dueDate',
     );
   });
 
@@ -47,5 +52,43 @@ describe('updateTodoSchema', () => {
 
   it('does not allow changing the owner', () => {
     expect(updateTodoSchema.safeParse({ text: 'Hi', owner: 'someone-else' }).success).toBe(false);
+  });
+});
+
+describe('due date', () => {
+  it.each([['2030-05-01T20:59:59.999Z'], ['2030-05-01T23:59:59+03:00'], [null]])(
+    'accepts %j',
+    (dueDate) => {
+      expect(createTodoSchema.safeParse({ text: 'Pay rent', dueDate }).success).toBe(true);
+      expect(updateTodoSchema.safeParse({ dueDate }).success).toBe(true);
+    },
+  );
+
+  it.each([['2030-05-01'], ['tomorrow'], [1_900_000_000_000]])('rejects %j', (dueDate) => {
+    expect(createTodoSchema.safeParse({ text: 'Pay rent', dueDate }).success).toBe(false);
+  });
+});
+
+describe('listTodosQuerySchema', () => {
+  it('defaults to the first page of 10 todos, all of them', () => {
+    expect(listTodosQuerySchema.parse({})).toEqual({ filter: 'all', page: 1, limit: 10 });
+  });
+
+  it('parses query string values', () => {
+    expect(listTodosQuerySchema.parse({ filter: 'overdue', page: '3', limit: '25' })).toEqual({
+      filter: 'overdue',
+      page: 3,
+      limit: 25,
+    });
+  });
+
+  it.each([
+    [{ filter: 'later' }],
+    [{ page: '0' }],
+    [{ page: '1.5' }],
+    [{ limit: '101' }],
+    [{ limit: 'ten' }],
+  ])('rejects %j', (query) => {
+    expect(listTodosQuerySchema.safeParse(query).success).toBe(false);
   });
 });

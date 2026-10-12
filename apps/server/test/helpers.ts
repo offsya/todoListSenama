@@ -2,6 +2,7 @@ import type { AuthResponse, Todo } from '@todo/shared';
 import request from 'supertest';
 import { expect } from 'vitest';
 import { createApp } from '../src/app.js';
+import { TodoModel } from '../src/modules/todos/todo.model.js';
 
 export const app = createApp();
 
@@ -45,6 +46,21 @@ export function asUser(user: Pick<TestUser, 'token'>) {
 export async function createTodo(user: TestUser, text = 'Buy milk'): Promise<Todo> {
   const res = await asUser(user).post('/todos').send({ text }).expect(201);
   return res.body as Todo;
+}
+
+/**
+ * Inserts `Todo 0` … `Todo <count - 1>` straight into the database, one millisecond apart, so
+ * the newest-first order starts with `Todo <count - 1>`.
+ */
+export async function insertTodos(user: TestUser, count: number): Promise<void> {
+  const start = Date.now() - count;
+  await TodoModel.insertMany(
+    Array.from({ length: count }, (_, i) => ({
+      text: `Todo ${i}`,
+      owner: user.id,
+      createdAt: new Date(start + i),
+    })),
+  );
 }
 
 /** Matches an ISO-8601 timestamp produced by `Date#toISOString`. */

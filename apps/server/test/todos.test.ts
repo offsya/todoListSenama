@@ -1,12 +1,25 @@
-import { TODO_TEXT_MAX_LENGTH } from '@todo/shared';
+import { TODO_TEXT_MAX_LENGTH, type Todo, type TodoPage } from '@todo/shared';
 import request from 'supertest';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createApp } from '../src/app.js';
 import { TodoModel } from '../src/modules/todos/todo.model.js';
 import { MAX_TODOS_PER_USER } from '../src/modules/todos/todos.service.js';
-import { asUser, createTodo, createUser, isoDate, missingId, type TestUser } from './helpers.js';
+import {
+  asUser,
+  createTodo,
+  createUser,
+  insertTodos,
+  isoDate,
+  missingId,
+  type TestUser,
+} from './helpers.js';
 
 let user: TestUser;
+
+const texts = (items: Todo[]) => items.map((todo) => todo.text);
+/** `Todo <from>` … `Todo <to>`, counting down. */
+const range = (from: number, to: number) =>
+  Array.from({ length: from - to + 1 }, (_, i) => `Todo ${from - i}`);
 
 beforeEach(async () => {
   user = await createUser();
@@ -20,6 +33,7 @@ describe('POST /todos', () => {
       id: expect.any(String),
       text: 'Buy milk',
       completed: false,
+      dueDate: null,
       createdAt: isoDate,
       updatedAt: isoDate,
     });
@@ -27,8 +41,30 @@ describe('POST /todos', () => {
     expect(stored?.owner.toString()).toBe(user.id);
   });
 
+  it('stores a due date', async () => {
+    const dueDate = '2030-05-01T20:59:59.999Z';
+
+    const res = await asUser(user).post('/todos').send({ text: 'Pay rent', dueDate }).expect(201);
+
+    expect(res.body).toMatchObject({ text: 'Pay rent', dueDate });
+    const stored = await TodoModel.findById(res.body.id).lean();
+    expect(stored?.dueDate?.toISOString()).toBe(dueDate);
+  });
+
+  it('accepts a due date with a time zone offset and returns it in UTC', async () => {
+    const res = await asUser(user)
+      .post('/todos')
+      .send({ text: 'Call mom', dueDate: '2030-05-01T23:59:59+03:00' })
+      .expect(201);
+
+    expect(res.body.dueDate).toBe('2030-05-01T20:59:59.000Z');
+  });
+
   it.each([
     ['empty text', { text: '' }, 'text'],
+    ['a date without a time', { text: 'Pay rent', dueDate: '2030-05-01' }, 'dueDate'],
+    ['a malformed due date', { text: 'Pay rent', dueDate: 'tomorrow' }, 'dueDate'],
+    ['a numeric due date', { text: 'Pay rent', dueDate: 1_900_000_000_000 }, 'dueDate'],
     ['whitespace-only text', { text: '   ' }, 'text'],
     ['too long text', { text: 'a'.repeat(TODO_TEXT_MAX_LENGTH + 1) }, 'text'],
     ['non-string text', { text: 42 }, 'text'],
@@ -75,10 +111,10 @@ describe('POST /todos', () => {
 });
 
 describe('GET /todos', () => {
-  it('returns an empty list for a new user', async () => {
+  it('returns an empty first page for a new user', async () => {
     const res = await asUser(user).get('/todos').expect(200);
 
-    expect(res.body).toEqual([]);
+    expect(res.body).toEqual({ items: [], page: 1, limit: 10, total: 0, totalPages: 1 });
   });
 
   it('returns todos from the database, newest first', async () => {
@@ -87,7 +123,142 @@ describe('GET /todos', () => {
 
     const res = await asUser(user).get('/todos').expect(200);
 
-    expect(res.body).toEqual([second, first]);
+    expect(res.body.items).toEqual([second, first]);
+  });
+
+  describe('pages', () => {
+    beforeEach(async () => {
+      await insertTodos(user, 25);
+    });
+
+    it('returns the first 10 todos by default', async () => {
+      const res = await asUser(user).get('/todos').expect(200);
+
+      expect(res.body).toMatchObject({ page: 1, limit: 10, total: 25, totalPages: 3 });
+      expect(texts(res.body.items)).toEqual(range(24, 15));
+    });
+
+    it('returns the requested page', async () => {
+      const second = await asUser(user).get('/todos?page=2').expect(200);
+      const last = await asUser(user).get('/todos?page=3').expect(200);
+
+      expect(texts(second.body.items)).toEqual(range(14, 5));
+      expect(texts(last.body.items)).toEqual(range(4, 0));
+      expect(last.body).toMatchObject({ page: 3, total: 25, totalPages: 3 });
+    });
+
+    it('honours the limit', async () => {
+      const res = await asUser(user).get('/todos?page=2&limit=7').expect(200);
+
+      expect(res.body).toMatchObject({ page: 2, limit: 7, total: 25, totalPages: 4 });
+      expect(texts(res.body.items)).toEqual(range(17, 11));
+    });
+
+    it('returns an empty page past the end', async () => {
+      const res = await asUser(user).get('/todos?page=4').expect(200);
+
+      expect(res.body).toMatchObject({ items: [], page: 4, total: 25, totalPages: 3 });
+    });
+
+    it.each([
+      ['page=0', 'page'],
+      ['page=-1', 'page'],
+      ['page=1.5', 'page'],
+      ['page=abc', 'page'],
+      ['limit=0', 'limit'],
+      ['limit=101', 'limit'],
+      ['filter=later', 'filter'],
+    ])('rejects %s', async (query, path) => {
+      const res = await asUser(user).get(`/todos?${query}`).expect(400);
+
+      expect(res.body.error).toMatchObject({
+        code: 'VALIDATION_ERROR',
+        details: [expect.objectContaining({ path })],
+      });
+    });
+  });
+
+  describe('filters', () => {
+    const DAY = 24 * 60 * 60 * 1000;
+    let todos: Record<
+      'noDate' | 'future' | 'past' | 'doneFuture' | 'donePast' | 'doneNoDate',
+      Todo
+    >;
+
+    beforeEach(async () => {
+      const make = async (
+        text: string,
+        { completed = false, dueIn }: { completed?: boolean; dueIn?: number },
+      ) => {
+        const dueDate =
+          dueIn === undefined ? undefined : new Date(Date.now() + dueIn).toISOString();
+        const created = await asUser(user).post('/todos').send({ text, dueDate }).expect(201);
+        if (!completed) return created.body as Todo;
+        const done = await asUser(user)
+          .put(`/todos/${created.body.id}`)
+          .send({ completed: true })
+          .expect(200);
+        return done.body as Todo;
+      };
+      // Created one by one: the order below is the creation order.
+      todos = {
+        noDate: await make('No due date', {}),
+        future: await make('Due tomorrow', { dueIn: DAY }),
+        past: await make('Due yesterday', { dueIn: -DAY }),
+        doneFuture: await make('Done, due tomorrow', { completed: true, dueIn: DAY }),
+        donePast: await make('Done, due yesterday', { completed: true, dueIn: -DAY }),
+        doneNoDate: await make('Done, no due date', { completed: true }),
+      };
+    });
+
+    const list = async (filter: string) => {
+      const res = await asUser(user).get(`/todos?filter=${filter}`).expect(200);
+      return res.body as TodoPage;
+    };
+
+    it('all: every todo', async () => {
+      const page = await list('all');
+
+      expect(page.total).toBe(6);
+      expect(page.items).toHaveLength(6);
+    });
+
+    it('active: not completed, due date not passed', async () => {
+      const page = await list('active');
+
+      expect(page.items).toEqual([todos.future, todos.noDate]);
+      expect(page.total).toBe(2);
+    });
+
+    it('done: completed, whatever the due date', async () => {
+      const page = await list('done');
+
+      expect(page.items).toEqual([todos.doneNoDate, todos.donePast, todos.doneFuture]);
+      expect(page.total).toBe(3);
+    });
+
+    it('overdue: not completed, due date passed', async () => {
+      const page = await list('overdue');
+
+      expect(page.items).toEqual([todos.past]);
+      expect(page.total).toBe(1);
+    });
+
+    it('moves a todo from active to overdue once its due date passes', async () => {
+      await TodoModel.updateOne({ _id: todos.future.id }, { dueDate: new Date(Date.now() - 1) });
+
+      expect(texts((await list('active')).items)).toEqual([todos.noDate.text]);
+      expect(texts((await list('overdue')).items)).toEqual([todos.past.text, todos.future.text]);
+    });
+
+    it('pages through filtered todos', async () => {
+      const first = await asUser(user).get('/todos?filter=done&limit=2').expect(200);
+      const second = await asUser(user).get('/todos?filter=done&limit=2&page=2').expect(200);
+
+      expect(first.body).toMatchObject({ total: 3, totalPages: 2 });
+      expect(first.body.items).toEqual([todos.doneNoDate, todos.donePast]);
+      expect(second.body.items).toEqual([todos.doneFuture]);
+    });
   });
 });
 
@@ -136,6 +307,17 @@ describe('PUT /todos/:id', () => {
     expect(Date.parse(res.body.updatedAt)).toBeGreaterThanOrEqual(Date.parse(todo.updatedAt));
   });
 
+  it('sets and clears the due date', async () => {
+    const todo = await createTodo(user);
+    const dueDate = '2030-01-31T22:59:59.999Z';
+
+    const set = await asUser(user).put(`/todos/${todo.id}`).send({ dueDate }).expect(200);
+    expect(set.body).toMatchObject({ text: todo.text, dueDate });
+
+    const cleared = await asUser(user).put(`/todos/${todo.id}`).send({ dueDate: null }).expect(200);
+    expect(cleared.body).toMatchObject({ text: todo.text, dueDate: null });
+  });
+
   it('marks a todo as completed and back', async () => {
     const todo = await createTodo(user);
 
@@ -156,6 +338,7 @@ describe('PUT /todos/:id', () => {
     ['an empty body', {}],
     ['a non-boolean status', { completed: 'yes' }],
     ['empty text', { text: ' ' }],
+    ['a malformed due date', { dueDate: '31.01.2030' }],
     ['an attempt to change the owner', { text: 'Hi', owner: missingId }],
   ])('rejects %s', async (_, payload) => {
     const todo = await createTodo(user);

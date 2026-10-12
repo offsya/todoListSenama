@@ -111,7 +111,7 @@ describe('POST /auth/login', () => {
     expect(payload.exp).toBeGreaterThan(Date.now() / 1000);
 
     // The token unlocks the todo list.
-    await asUser(res.body).get('/todos').expect(200, []);
+    await asUser(res.body).get('/todos').expect(200);
   });
 
   it.each([

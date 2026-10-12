@@ -82,8 +82,11 @@ describe("access to other users' todos", () => {
   it("lists only the current user's todos", async () => {
     const bobTodo = await createTodo(bob, "Bob's todo");
 
-    await asUser(alice).get('/todos').expect(200, [aliceTodo]);
-    await asUser(bob).get('/todos').expect(200, [bobTodo]);
+    const aliceList = await asUser(alice).get('/todos').expect(200);
+    const bobList = await asUser(bob).get('/todos').expect(200);
+
+    expect(aliceList.body).toMatchObject({ items: [aliceTodo], total: 1 });
+    expect(bobList.body).toMatchObject({ items: [bobTodo], total: 1 });
   });
 
   it("cannot read someone else's todo", async () => {

@@ -57,13 +57,14 @@ describe('API', () => {
   let alice;
   let bob;
 
+  const register = async () => {
+    const email = `smoke-${randomUUID()}@example.com`;
+    const res = await api('POST', '/auth/register', { body: { email, password } });
+    assert.equal(res.status, 201);
+    return { email, token: res.body.token };
+  };
+
   before(async () => {
-    const register = async () => {
-      const email = `smoke-${randomUUID()}@example.com`;
-      const res = await api('POST', '/auth/register', { body: { email, password } });
-      assert.equal(res.status, 201);
-      return { email, token: res.body.token };
-    };
     alice = await register();
     bob = await register();
   });
@@ -107,16 +108,37 @@ describe('API', () => {
     assert.equal((await api('GET', path, asBob)).status, 404);
     assert.equal((await api('PUT', path, { ...asBob, body: { completed: true } })).status, 404);
     assert.equal((await api('DELETE', path, asBob)).status, 404);
-    assert.deepEqual((await api('GET', '/todos', asBob)).body, []);
+    assert.deepEqual((await api('GET', '/todos', asBob)).body.items, []);
 
     const updated = await api('PUT', path, {
       token: alice.token,
       body: { text: 'Smoke test, done', completed: true },
     });
     assert.equal(updated.status, 200);
-    assert.deepEqual((await api('GET', '/todos', { token: alice.token })).body, [updated.body]);
+    assert.deepEqual((await api('GET', '/todos', { token: alice.token })).body.items, [
+      updated.body,
+    ]);
 
     assert.equal((await api('DELETE', path, { token: alice.token })).status, 204);
-    assert.deepEqual((await api('GET', '/todos', { token: alice.token })).body, []);
+    assert.deepEqual((await api('GET', '/todos', { token: alice.token })).body.items, []);
+  });
+
+  it('filters by due date and pages through the list', async () => {
+    const asCarol = { token: (await register()).token };
+    const create = (text, dueDate) =>
+      api('POST', '/todos', { ...asCarol, body: { text, dueDate } }).then((res) => {
+        assert.equal(res.status, 201);
+        return res.body;
+      });
+    const overdue = await create('Overdue', '2020-01-01T00:00:00.000Z');
+    const active = await create('Active', '2999-01-01T00:00:00.000Z');
+
+    const list = async (query) => (await api('GET', `/todos?${query}`, asCarol)).body;
+    assert.deepEqual((await list('filter=overdue')).items, [overdue]);
+    assert.deepEqual((await list('filter=active')).items, [active]);
+    assert.deepEqual((await list('filter=done')).items, []);
+
+    const page = await list('limit=1&page=2');
+    assert.deepEqual(page, { items: [overdue], page: 2, limit: 1, total: 2, totalPages: 2 });
   });
 });

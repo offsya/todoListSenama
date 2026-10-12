@@ -5,6 +5,7 @@ const todoSchema = new Schema(
   {
     text: { type: String, required: true, trim: true, maxlength: TODO_TEXT_MAX_LENGTH },
     completed: { type: Boolean, required: true, default: false },
+    dueDate: { type: Date, default: null },
     owner: { type: Schema.Types.ObjectId, ref: 'User', required: true },
   },
   { timestamps: true },
@@ -23,6 +24,7 @@ export function toTodoDto(todo: TodoRecord): Todo {
     id: todo._id.toString(),
     text: todo.text,
     completed: todo.completed,
+    dueDate: todo.dueDate?.toISOString() ?? null,
     createdAt: todo.createdAt.toISOString(),
     updatedAt: todo.updatedAt.toISOString(),
   };

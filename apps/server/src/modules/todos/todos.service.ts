@@ -1,11 +1,18 @@
-import type { CreateTodoInput, Todo, UpdateTodoInput } from '@todo/shared';
+import type {
+  CreateTodoInput,
+  ListTodosQuery,
+  Todo,
+  TodoFilter,
+  TodoPage,
+  UpdateTodoInput,
+} from '@todo/shared';
+import { trusted, type QueryFilter } from 'mongoose';
 import { HttpError } from '../../lib/http-error.js';
 import { TodoModel, toTodoDto } from './todo.model.js';
 
 /**
- * Upper bound for one user's list. `GET /todos` returns the whole list in one response, so an
- * unbounded list would let a single account make that request slow and memory-hungry for the
- * whole server.
+ * Upper bound for one user's list. Pages are read with skip/limit, which gets slower the further
+ * the page; the cap keeps the last page cheap.
  */
 export const MAX_TODOS_PER_USER = 1000;
 
@@ -13,10 +20,50 @@ export const MAX_TODOS_PER_USER = 1000;
 // "forbidden", so other users' todo ids cannot be probed.
 const todoNotFound = () => HttpError.notFound('Todo not found');
 
-export async function listTodos(ownerId: string): Promise<Todo[]> {
-  // _id breaks ties between todos created within the same millisecond.
-  const todos = await TodoModel.find({ owner: ownerId }).sort({ createdAt: -1, _id: -1 }).lean();
-  return todos.map(toTodoDto);
+type TodoQuery = QueryFilter<InstanceType<typeof TodoModel>>;
+
+/**
+ * Conditions of each filter. Operators go through `trusted()`: the connection sanitizes filters,
+ * which would otherwise turn `{ $lt: now }` into an equality check.
+ */
+function filterConditions(filter: TodoFilter, now: Date): TodoQuery {
+  switch (filter) {
+    case 'all':
+      return {};
+    case 'done':
+      return { completed: true };
+    case 'active':
+      // `null` also matches todos without the field.
+      return {
+        completed: false,
+        $or: [{ dueDate: null }, { dueDate: trusted({ $gte: now }) }],
+      };
+    case 'overdue':
+      return { completed: false, dueDate: trusted({ $lt: now }) };
+  }
+}
+
+export async function listTodos(
+  ownerId: string,
+  { filter, page, limit }: ListTodosQuery,
+): Promise<TodoPage> {
+  const query: TodoQuery = { owner: ownerId, ...filterConditions(filter, new Date()) };
+  const [todos, total] = await Promise.all([
+    TodoModel.find(query)
+      // _id breaks ties between todos created within the same millisecond.
+      .sort({ createdAt: -1, _id: -1 })
+      .skip((page - 1) * limit)
+      .limit(limit)
+      .lean(),
+    TodoModel.countDocuments(query),
+  ]);
+  return {
+    items: todos.map(toTodoDto),
+    page,
+    limit,
+    total,
+    totalPages: Math.max(1, Math.ceil(total / limit)),
+  };
 }
 
 export async function getTodo(ownerId: string, id: string): Promise<Todo> {

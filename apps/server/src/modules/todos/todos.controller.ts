@@ -1,11 +1,12 @@
-import { createTodoSchema, updateTodoSchema } from '@todo/shared';
+import { createTodoSchema, listTodosQuerySchema, updateTodoSchema } from '@todo/shared';
 import type { Request, Response } from 'express';
-import { idParamsSchema, parseBody, parseParams } from '../../lib/validation.js';
+import { idParamsSchema, parseBody, parseParams, parseQuery } from '../../lib/validation.js';
 import { getUserId } from '../../middleware/auth.js';
 import * as todosService from './todos.service.js';
 
 export async function list(req: Request, res: Response): Promise<void> {
-  res.json(await todosService.listTodos(getUserId(req)));
+  const query = parseQuery(listTodosQuerySchema, req);
+  res.json(await todosService.listTodos(getUserId(req), query));
 }
 
 export async function getById(req: Request, res: Response): Promise<void> {
