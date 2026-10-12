@@ -1,5 +1,5 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useTodoTextEditor } from '@todo/client';
+import { formatDueDate, isOverdue, useTodoTextEditor } from '@todo/client';
 import { TODO_TEXT_MAX_LENGTH, type Todo } from '@todo/shared';
 import { memo, useState } from 'react';
 import { Platform, Pressable, Text, TextInput, View } from 'react-native';
@@ -57,6 +57,7 @@ export const TodoItem = memo(function TodoItem({
           aria-label={`Edit "${todo.text}"`}
         >
           <Text style={[styles.text, todo.completed && styles.textCompleted]}>{todo.text}</Text>
+          {todo.dueDate && <DueDate dueDate={todo.dueDate} overdue={isOverdue(todo)} />}
         </Pressable>
       )}
 
@@ -68,6 +69,16 @@ export const TodoItem = memo(function TodoItem({
     </View>
   );
 });
+
+function DueDate({ dueDate, overdue }: { dueDate: string; overdue: boolean }) {
+  const styles = useStyles();
+  return (
+    <Text style={[styles.due, overdue && styles.dueOverdue]}>
+      {overdue ? 'Overdue · ' : 'Due '}
+      {formatDueDate(dueDate)}
+    </Text>
+  );
+}
 
 /**
  * react-native-web presses an element on Space only when its role is "button", so a custom
@@ -147,6 +158,15 @@ const useStyles = makeStyles((colors) => ({
   text: {
     color: colors.text,
     fontSize: 16,
+  },
+  due: {
+    marginTop: 2,
+    color: colors.textMuted,
+    fontSize: 13,
+  },
+  dueOverdue: {
+    color: colors.danger,
+    fontWeight: '600',
   },
   textCompleted: {
     color: colors.textMuted,

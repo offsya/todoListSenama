@@ -1,11 +1,4 @@
-import {
-  getTodoFilter,
-  useDeleteTodo,
-  useSignOut,
-  useTodos,
-  useUpdateTodo,
-  type TodoFilter,
-} from '@todo/client';
+import { getTodoFilter, useDeleteTodo, useSignOut, useTodoList, useUpdateTodo } from '@todo/client';
 import { getErrorMessage, type Todo } from '@todo/shared';
 import { Stack } from 'expo-router';
 import { useCallback, useState } from 'react';
@@ -21,14 +14,14 @@ import { makeStyles, radius, useColors } from '../theme';
 export default function TodosScreen() {
   const styles = useStyles();
   const colors = useColors();
-  const todos = useTodos();
+  const list = useTodoList();
+  const { todos, filter } = list;
   // Edits are optimistic: a failed one is rolled back and reported here, because the item
   // itself may already be filtered out of view.
   const [actionError, setActionError] = useState<unknown>(null);
   const updateTodo = useUpdateTodo({ onError: setActionError });
   const deleteTodo = useDeleteTodo({ onError: setActionError });
   const signOut = useSignOut();
-  const [filter, setFilter] = useState<TodoFilter>('all');
   // Only a pull shows the refresh spinner, not the resync after every edit or on app focus.
   const [isRefreshingByUser, setIsRefreshingByUser] = useState(false);
   const refreshByUser = async () => {
@@ -53,8 +46,7 @@ export default function TodosScreen() {
   const destroy = useCallback((todo: Todo) => remove(todo.id), [remove]);
 
   const activeFilter = getTodoFilter(filter);
-  const items = todos.data ?? [];
-  const visible = items.filter(activeFilter.matches);
+  const visible = todos.data?.items ?? [];
   const retryButton = <TextButton title="Retry" onPress={() => void todos.refetch()} />;
 
   const renderEmpty = () => {
@@ -103,10 +95,25 @@ export default function TodosScreen() {
                   action={retryButton}
                 />
               )}
-              {todos.data && <FilterTabs todos={items} value={filter} onChange={setFilter} />}
+              {todos.data && <FilterTabs value={filter} onChange={list.setFilter} />}
             </View>
           }
           ListEmptyComponent={renderEmpty()}
+          ListFooterComponent={
+            todos.data && (
+              <View style={styles.pagination} role="navigation" aria-label="Pages">
+                <PageButton
+                  title="‹ Previous"
+                  disabled={!list.hasPrevious}
+                  onPress={list.previous}
+                />
+                <Text style={styles.pageInfo} aria-live="polite">
+                  Page {list.page} of {list.totalPages}
+                </Text>
+                <PageButton title="Next ›" disabled={!list.hasNext} onPress={list.next} />
+              </View>
+            )
+          }
           ItemSeparatorComponent={Separator}
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
@@ -129,6 +136,31 @@ export default function TodosScreen() {
 function Separator() {
   const styles = useStyles();
   return <View style={styles.separator} />;
+}
+
+interface PageButtonProps {
+  title: string;
+  disabled: boolean;
+  onPress: () => void;
+}
+
+function PageButton({ title, disabled, onPress }: PageButtonProps) {
+  const styles = useStyles();
+  return (
+    <Pressable
+      role="button"
+      aria-disabled={disabled}
+      disabled={disabled}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.pageButton,
+        pressed && styles.pressed,
+        disabled && styles.disabled,
+      ]}
+    >
+      <Text style={styles.pageButtonText}>{title}</Text>
+    </Pressable>
+  );
 }
 
 function TextButton({ title, onPress }: { title: string; onPress: () => void }) {
@@ -161,6 +193,40 @@ const useStyles = makeStyles((colors) => ({
     color: colors.textMuted,
     fontSize: 15,
     textAlign: 'center',
+  },
+  pagination: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+    marginTop: 12,
+  },
+  pageInfo: {
+    color: colors.textMuted,
+    fontSize: 14,
+    fontVariant: ['tabular-nums'],
+  },
+  pageButton: {
+    minHeight: 44,
+    minWidth: 96,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.sm,
+    backgroundColor: colors.surface,
+  },
+  pageButtonText: {
+    color: colors.primaryText,
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  pressed: {
+    opacity: 0.85,
+  },
+  disabled: {
+    opacity: 0.4,
   },
   textButtonArea: {
     paddingVertical: 4,

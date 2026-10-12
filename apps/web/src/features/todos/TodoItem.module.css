@@ -20,9 +20,25 @@
   cursor: pointer;
 }
 
-.text {
+.body {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.due {
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+}
+
+.due[data-overdue] {
+  color: var(--color-danger);
+  font-weight: 600;
+}
+
+.text {
   overflow-wrap: anywhere;
   cursor: text;
   transition: color var(--transition);

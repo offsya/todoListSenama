@@ -1,15 +1,13 @@
 import { TODO_FILTERS, type TodoFilter } from '@todo/client';
-import type { Todo } from '@todo/shared';
 import { Pressable, Text, View } from 'react-native';
 import { makeStyles, radius } from '../../theme';
 
 interface FilterTabsProps {
-  todos: Todo[];
   value: TodoFilter;
   onChange: (filter: TodoFilter) => void;
 }
 
-export function FilterTabs({ todos, value, onChange }: FilterTabsProps) {
+export function FilterTabs({ value, onChange }: FilterTabsProps) {
   const styles = useStyles();
 
   return (
@@ -24,9 +22,7 @@ export function FilterTabs({ todos, value, onChange }: FilterTabsProps) {
             onPress={() => onChange(option.value)}
             style={[styles.tab, selected && styles.tabSelected]}
           >
-            <Text style={[styles.label, selected && styles.labelSelected]}>
-              {option.label} {todos.filter(option.matches).length}
-            </Text>
+            <Text style={[styles.label, selected && styles.labelSelected]}>{option.label}</Text>
           </Pressable>
         );
       })}

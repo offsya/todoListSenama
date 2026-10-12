@@ -1,19 +1,22 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useCreateTodo } from '@todo/client';
+import { dayFromDate, dueDateFromDay, useCreateTodo } from '@todo/client';
 import { createTodoSchema, getErrorMessage, TODO_TEXT_MAX_LENGTH } from '@todo/shared';
+import { useState } from 'react';
 import { useController, useForm } from 'react-hook-form';
 import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native';
 import { makeStyles, radius, useColors } from '../../theme';
+import { DueDateField } from './DueDateField';
 
 export function NewTodoForm() {
   const styles = useStyles();
   const colors = useColors();
   const createTodo = useCreateTodo();
   const { control, handleSubmit, reset } = useForm({
-    resolver: zodResolver(createTodoSchema),
+    resolver: zodResolver(createTodoSchema.pick({ text: true })),
     defaultValues: { text: '' },
   });
+  const [dueDay, setDueDay] = useState<Date | null>(null);
   const {
     field: { ref, value, onChange, onBlur },
     fieldState,
@@ -22,7 +25,17 @@ export function NewTodoForm() {
   const submit = handleSubmit(({ text }) => {
     // The keyboard's return key stays active while the request is in flight: no duplicates.
     if (createTodo.isPending) return;
-    createTodo.mutate(text, { onSuccess: () => reset() });
+    // Due at the end of the picked day, in the user's time zone.
+    const dueDate = dueDay ? dueDateFromDay(dayFromDate(dueDay)) : null;
+    createTodo.mutate(
+      { text, dueDate },
+      {
+        onSuccess: () => {
+          reset();
+          setDueDay(null);
+        },
+      },
+    );
   });
 
   const error =
@@ -66,13 +79,14 @@ export function NewTodoForm() {
         </Pressable>
       </View>
       {error && <Text style={styles.error}>{error}</Text>}
+      <DueDateField value={dueDay} onChange={setDueDay} />
     </View>
   );
 }
 
 const useStyles = makeStyles((colors) => ({
   container: {
-    gap: 6,
+    gap: 8,
   },
   row: {
     flexDirection: 'row',

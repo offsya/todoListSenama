@@ -1,6 +1,6 @@
 import type { LoginInput, RegisterInput } from '../schemas/auth.js';
-import type { CreateTodoInput, UpdateTodoInput } from '../schemas/todo.js';
-import type { AuthResponse, CurrentUserResponse, Todo } from '../types.js';
+import type { CreateTodoInput, ListTodosQuery, UpdateTodoInput } from '../schemas/todo.js';
+import type { AuthResponse, CurrentUserResponse, Todo, TodoPage } from '../types.js';
 import { ApiError, isApiErrorBody } from './errors.js';
 
 type MaybePromise<T> = T | Promise<T>;
@@ -95,7 +95,8 @@ export function createApiClient(options: ApiClientOptions) {
       me: async () => (await request<CurrentUserResponse>('GET', '/auth/me')).user,
     },
     todos: {
-      list: () => request<Todo[]>('GET', '/todos'),
+      list: (query: Partial<ListTodosQuery> = {}) =>
+        request<TodoPage>('GET', `/todos${toQueryString(query)}`),
       create: (input: CreateTodoInput) => request<Todo>('POST', '/todos', { body: input }),
       update: (id: string, input: UpdateTodoInput) =>
         request<Todo>('PUT', `/todos/${encodeURIComponent(id)}`, { body: input }),
@@ -105,6 +106,15 @@ export function createApiClient(options: ApiClientOptions) {
 }
 
 export type ApiClient = ReturnType<typeof createApiClient>;
+
+function toQueryString(query: Record<string, string | number | undefined>): string {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(query)) {
+    if (value !== undefined) params.set(key, String(value));
+  }
+  const search = params.toString();
+  return search ? `?${search}` : '';
+}
 
 async function readJson(response: Response): Promise<unknown> {
   const text = await response.text();

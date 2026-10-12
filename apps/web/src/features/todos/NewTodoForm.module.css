@@ -6,7 +6,25 @@
 
 .row {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
+}
+
+.date {
+  flex: 0 1 170px;
+  padding: 0 12px;
+  color: var(--color-text);
+}
+
+/* Phones: the text gets a full row, the date and the button share the next one. */
+@media (width < 560px) {
+  .row > .input:first-child {
+    flex-basis: 100%;
+  }
+
+  .date {
+    flex: 1;
+  }
 }
 
 .input {
