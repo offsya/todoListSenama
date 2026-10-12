@@ -54,7 +54,7 @@ it('returns to the sign-in screen when the API rejects the stored token', async 
   expect(app.getPathname()).toBe('/sign-in');
   expect(sessionStore.getState().session).toBeNull();
   expect(fetchMock).toHaveBeenCalledWith(
-    expect.stringMatching(/\/todos$/),
+    expect.stringMatching(/\/todos\?filter=all&page=1&limit=10$/),
     expect.objectContaining({
       headers: expect.objectContaining({ Authorization: 'Bearer expired-token' }),
     }),

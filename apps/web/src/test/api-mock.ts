@@ -1,5 +1,7 @@
+import { getTodoFilter } from '@todo/client';
 import {
   createTodoSchema,
+  listTodosQuerySchema,
   loginSchema,
   registerSchema,
   updateTodoSchema,
@@ -7,6 +9,7 @@ import {
   type ApiErrorCode,
   type AuthResponse,
   type Todo,
+  type TodoPage,
   type User,
 } from '@todo/shared';
 import { http, HttpResponse } from 'msw/http';
@@ -86,11 +89,17 @@ export function seedUser(email = 'alice@example.com', password = 'password123'):
   return { token: tokenFor(user), user };
 }
 
-export function seedTodo(owner: AuthResponse, text: string, completed = false): Todo {
+export function seedTodo(
+  owner: AuthResponse,
+  text: string,
+  completed = false,
+  dueDate: string | null = null,
+): Todo {
   const todo: StoredTodo = {
     id: nextId(),
     text,
     completed,
+    dueDate,
     createdAt: now(),
     updatedAt: now(),
     ownerId: owner.user.id,
@@ -130,7 +139,22 @@ const handlers = [
   http.get(`${API_URL}/todos`, ({ request }) => {
     const user = authenticate(request);
     if (!user) return unauthorized();
-    return HttpResponse.json(db.todos.filter((todo) => todo.ownerId === user.id).map(toTodo));
+    const query = listTodosQuerySchema.safeParse(
+      Object.fromEntries(new URL(request.url).searchParams),
+    );
+    if (!query.success) return validationError(query.error);
+    const { filter, page, limit } = query.data;
+    const matching = db.todos
+      .filter((todo) => todo.ownerId === user.id && getTodoFilter(filter).matches(todo))
+      .map(toTodo);
+    const body: TodoPage = {
+      items: matching.slice((page - 1) * limit, page * limit),
+      page,
+      limit,
+      total: matching.length,
+      totalPages: Math.max(1, Math.ceil(matching.length / limit)),
+    };
+    return HttpResponse.json(body);
   }),
 
   http.post(`${API_URL}/todos`, async ({ request }) => {
@@ -142,6 +166,7 @@ const handlers = [
       id: nextId(),
       text: input.data.text,
       completed: false,
+      dueDate: input.data.dueDate ?? null,
       createdAt: now(),
       updatedAt: now(),
       ownerId: user.id,
@@ -174,5 +199,6 @@ const handlers = [
 export const server = setupServer(...handlers);
 
 server.events.on('request:start', ({ request }) => {
-  db.requests.push(`${request.method} ${new URL(request.url).pathname.replace(/^\/api/, '')}`);
+  const url = new URL(request.url);
+  db.requests.push(`${request.method} ${url.pathname.replace(/^\/api/, '')}${url.search}`);
 });

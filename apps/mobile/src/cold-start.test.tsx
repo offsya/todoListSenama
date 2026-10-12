@@ -34,7 +34,13 @@ jest.mock('expo-splash-screen', () => ({
 }));
 
 jest.mock('./lib/api', () => ({
-  api: { todos: { list: jest.fn(() => Promise.resolve([])) } },
+  api: {
+    todos: {
+      list: jest.fn(() =>
+        Promise.resolve({ items: [], page: 1, limit: 10, total: 0, totalPages: 1 }),
+      ),
+    },
+  },
 }));
 
 it('keeps the splash screen up until the stored session has been read', async () => {

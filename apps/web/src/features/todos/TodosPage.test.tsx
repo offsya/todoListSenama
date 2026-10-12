@@ -20,6 +20,8 @@ beforeEach(() => {
 });
 
 const todoList = () => screen.findByRole('list', { name: 'Todos' });
+const itemTexts = () =>
+  screen.getAllByRole('checkbox').map((checkbox) => checkbox.getAttribute('aria-label'));
 
 describe('TodosPage', () => {
   it('shows the empty state for a new user', async () => {
@@ -72,7 +74,6 @@ describe('TodosPage', () => {
 
     expect(checkbox).toBeChecked();
     await waitFor(() => expect(findStoredTodo('Buy milk')?.completed).toBe(true));
-    expect(screen.getByText('All done')).toBeInTheDocument();
   });
 
   it('edits a todo', async () => {
@@ -143,22 +144,91 @@ describe('TodosPage', () => {
     await waitFor(() => expect(checkbox).not.toBeChecked());
   });
 
-  it('filters todos', async () => {
+  it('filters todos on the server', async () => {
     seedTodo(session, 'Done', true);
     seedTodo(session, 'To do');
+    seedTodo(session, 'Late', false, '2020-01-01T00:00:00.000Z');
     const { user } = renderApp('/', { session });
-    const list = await todoList();
+    await todoList();
 
-    await user.click(screen.getByRole('button', { name: /^Active/ }));
-    expect(
-      within(list)
-        .getAllByRole('listitem')
-        .map((item) => item.textContent),
-    ).toEqual(['To do']);
+    await user.click(screen.getByRole('button', { name: 'Active' }));
+    await waitFor(() => expect(itemTexts()).toEqual(['To do']));
 
-    await user.click(screen.getByRole('button', { name: /^Completed/ }));
-    expect(within(await todoList()).getByText('Done')).toBeInTheDocument();
-    expect(screen.queryByText('To do')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Done' }));
+    await waitFor(() => expect(itemTexts()).toEqual(['Done']));
+
+    await user.click(screen.getByRole('button', { name: 'Overdue' }));
+    await waitFor(() => expect(itemTexts()).toEqual(['Late']));
+
+    await user.click(screen.getByRole('button', { name: 'All' }));
+    await waitFor(() => expect(itemTexts()).toHaveLength(3));
+    expect(apiRequests()).toEqual(
+      expect.arrayContaining([
+        'GET /todos?filter=active&page=1&limit=10',
+        'GET /todos?filter=done&page=1&limit=10',
+        'GET /todos?filter=overdue&page=1&limit=10',
+      ]),
+    );
+  });
+
+  it('shows the due date and marks overdue todos', async () => {
+    seedTodo(session, 'Late', false, '2020-01-01T00:00:00.000Z');
+    seedTodo(session, 'Later', false, '2999-03-04T20:59:59.999Z');
+    renderApp('/', { session });
+
+    const late = await screen.findByText('Late');
+    expect(late.parentElement).toHaveTextContent(/Overdue · Jan 1, 2020/);
+    expect(screen.getByText('Later').parentElement).toHaveTextContent(/Due Mar [45], 2999/);
+  });
+
+  it('adds a todo with a due date', async () => {
+    const { user } = renderApp('/', { session });
+
+    await user.type(await screen.findByLabelText('New todo'), 'Pay rent');
+    await user.type(screen.getByLabelText('Due date'), '2030-05-01');
+    await user.click(screen.getByRole('button', { name: 'Add' }));
+
+    expect(await screen.findByText('Pay rent')).toBeInTheDocument();
+    const stored = new Date(findStoredTodo('Pay rent')!.dueDate!);
+    // The end of the picked day in the user's time zone.
+    expect([stored.getFullYear(), stored.getMonth(), stored.getDate()]).toEqual([2030, 4, 1]);
+    expect([stored.getHours(), stored.getMinutes()]).toEqual([23, 59]);
+    expect(screen.getByLabelText('Due date')).toHaveValue('');
+  });
+
+  it('pages through the todos with Next and Previous', async () => {
+    for (let i = 1; i <= 12; i += 1) seedTodo(session, `Todo ${i}`);
+    const { user } = renderApp('/', { session });
+    await todoList();
+
+    expect(itemTexts()).toHaveLength(10);
+    expect(itemTexts()[0]).toBe('Todo 12');
+    expect(screen.getByText('Page 1 of 2')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Previous/ })).toBeDisabled();
+
+    await user.click(screen.getByRole('button', { name: /Next/ }));
+
+    await waitFor(() => expect(itemTexts()).toEqual(['Todo 2', 'Todo 1']));
+    expect(screen.getByText('Page 2 of 2')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Next/ })).toBeDisabled();
+
+    await user.click(screen.getByRole('button', { name: /Previous/ }));
+
+    await waitFor(() => expect(itemTexts()[0]).toBe('Todo 12'));
+    expect(screen.getByText('Page 1 of 2')).toBeInTheDocument();
+  });
+
+  it('goes back a page when the last todo of the last page is deleted', async () => {
+    for (let i = 1; i <= 11; i += 1) seedTodo(session, `Todo ${i}`);
+    const { user } = renderApp('/', { session });
+    await todoList();
+    await user.click(screen.getByRole('button', { name: /Next/ }));
+    await waitFor(() => expect(itemTexts()).toEqual(['Todo 1']));
+
+    await user.click(screen.getByRole('button', { name: 'Delete "Todo 1"' }));
+
+    await waitFor(() => expect(screen.getByText('Page 1 of 1')).toBeInTheDocument());
+    expect(itemTexts()).toHaveLength(10);
   });
 
   it('offers to retry when the todos cannot be loaded', async () => {
@@ -237,7 +307,10 @@ describe('TodosPage', () => {
     seedTodo(session, 'First');
     const { user } = renderApp('/', { session });
     await todoList();
-    await user.click(screen.getByRole('button', { name: /^Active/ }));
+    await user.click(screen.getByRole('button', { name: 'Active' }));
+    await waitFor(() =>
+      expect(screen.getByRole('list', { name: 'Todos' })).toHaveAttribute('aria-busy', 'false'),
+    );
 
     // Space on the focused checkbox: "First" is completed and leaves the Active filter.
     screen.getByRole('checkbox', { name: 'First' }).focus();

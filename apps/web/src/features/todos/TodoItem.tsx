@@ -1,4 +1,4 @@
-import { useTodoTextEditor } from '@todo/client';
+import { formatDueDate, isOverdue, useTodoTextEditor } from '@todo/client';
 import { TODO_TEXT_MAX_LENGTH, type Todo } from '@todo/shared';
 import { useEffect, useId, useRef, useState } from 'react';
 import { Button } from '../../components/Button';
@@ -84,9 +84,12 @@ export function TodoItem({
         />
       ) : (
         <>
-          <span className={styles.text} onDoubleClick={() => setIsEditing(true)}>
-            {todo.text}
-          </span>
+          <div className={styles.body}>
+            <span className={styles.text} onDoubleClick={() => setIsEditing(true)}>
+              {todo.text}
+            </span>
+            {todo.dueDate && <DueDate dueDate={todo.dueDate} overdue={isOverdue(todo)} />}
+          </div>
           <div className={styles.actions}>
             <Button
               ref={editButtonRef}
@@ -103,6 +106,17 @@ export function TodoItem({
         </>
       )}
     </li>
+  );
+}
+
+function DueDate({ dueDate, overdue }: { dueDate: string; overdue: boolean }) {
+  return (
+    <span className={styles.due} data-overdue={overdue || undefined}>
+      {overdue ? 'Overdue · ' : 'Due '}
+      <time dateTime={dueDate} title={new Date(dueDate).toLocaleString()}>
+        {formatDueDate(dueDate)}
+      </time>
+    </span>
   );
 }
 

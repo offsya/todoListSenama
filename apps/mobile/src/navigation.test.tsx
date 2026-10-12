@@ -1,4 +1,5 @@
-import { ApiError, type AuthResponse, type Todo } from '@todo/shared';
+import { getTodoFilter, type TodosQuery } from '@todo/client';
+import { ApiError, type AuthResponse, type Todo, type TodoPage } from '@todo/shared';
 import { act, fireEvent, renderRouter, screen, waitFor } from 'expo-router/testing-library';
 import * as SecureStore from 'expo-secure-store';
 import { RefreshControl, type RefreshControlProps } from 'react-native';
@@ -15,15 +16,25 @@ const mockSession: AuthResponse = {
   user: { id: 'u1', email: 'alice@example.com', createdAt: '2026-01-01T00:00:00.000Z' },
 };
 
-const makeTodo = (id: string, text: string): Todo => ({
+const makeTodo = (id: string, text: string, fields: Partial<Todo> = {}): Todo => ({
   id,
   text,
   completed: false,
+  dueDate: null,
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z',
+  ...fields,
 });
 
 const milk = makeTodo('t1', 'Buy milk');
+
+const pageOf = (items: Todo[], page = 1, limit = 10): TodoPage => ({
+  items: items.slice((page - 1) * limit, page * limit),
+  page,
+  limit,
+  total: items.length,
+  totalPages: Math.max(1, Math.ceil(items.length / limit)),
+});
 
 // The real screens, layout and session store run against a fake API and an in-memory keychain.
 // The fake API keeps state like the real one: the app resyncs the list after every change.
@@ -54,7 +65,16 @@ beforeEach(() => {
   sessionStore.set(null);
   queryClient.clear();
   serverTodos = [milk];
-  mockApi.todos.list.mockImplementation(() => Promise.resolve([...serverTodos]));
+  mockApi.todos.list.mockImplementation(
+    ({ filter = 'all', page = 1, limit = 10 }: Partial<TodosQuery> = {}) =>
+      Promise.resolve(
+        pageOf(
+          serverTodos.filter((todo) => getTodoFilter(filter).matches(todo)),
+          page,
+          limit,
+        ),
+      ),
+  );
   mockApi.todos.create.mockImplementation(({ text }: { text: string }) => {
     const todo = makeTodo(`t${serverTodos.length + 1}`, text);
     serverTodos = [todo, ...serverTodos];
@@ -186,7 +206,7 @@ describe('todo list', () => {
     await fireEvent.press(screen.getByRole('button', { name: 'Add todo' }));
 
     expect(await screen.findByText('Buy bread')).toBeOnTheScreen();
-    expect(mockApi.todos.create).toHaveBeenCalledWith({ text: 'Buy bread' });
+    expect(mockApi.todos.create).toHaveBeenCalledWith({ text: 'Buy bread', dueDate: null });
   });
 
   it('marks a todo as completed', async () => {
@@ -276,5 +296,54 @@ describe('todo list', () => {
       return Promise.resolve();
     });
     await waitFor(() => expect(refreshControl()?.refreshing).toBe(true));
+  });
+
+  it('filters todos on the server', async () => {
+    serverTodos = [
+      makeTodo('t3', 'Late', { dueDate: '2020-01-01T00:00:00.000Z' }),
+      makeTodo('t2', 'Finished', { completed: true }),
+      milk,
+    ];
+    const app = renderApp();
+    await app;
+    await screen.findByText('Late');
+
+    await fireEvent.press(screen.getByRole('tab', { name: 'Overdue' }));
+    await waitFor(() => expect(screen.queryByText('Buy milk')).not.toBeOnTheScreen());
+    expect(screen.getByText('Late')).toBeOnTheScreen();
+    expect(screen.getByText('Overdue · Jan 1, 2020')).toBeOnTheScreen();
+
+    await fireEvent.press(screen.getByRole('tab', { name: 'Done' }));
+    expect(await screen.findByText('Finished')).toBeOnTheScreen();
+    expect(screen.queryByText('Late')).not.toBeOnTheScreen();
+
+    await fireEvent.press(screen.getByRole('tab', { name: 'Active' }));
+    expect(await screen.findByText('Buy milk')).toBeOnTheScreen();
+    expect(screen.queryByText('Finished')).not.toBeOnTheScreen();
+
+    expect(mockApi.todos.list).toHaveBeenCalledWith({ filter: 'overdue', page: 1, limit: 10 });
+    expect(mockApi.todos.list).toHaveBeenCalledWith({ filter: 'done', page: 1, limit: 10 });
+    expect(mockApi.todos.list).toHaveBeenCalledWith({ filter: 'active', page: 1, limit: 10 });
+  });
+
+  it('pages through the todos with Next and Previous', async () => {
+    serverTodos = Array.from({ length: 12 }, (_, i) => makeTodo(`t${12 - i}`, `Todo ${12 - i}`));
+    const app = renderApp();
+    await app;
+    await screen.findByText('Todo 12');
+    expect(screen.getByText('Page 1 of 2')).toBeOnTheScreen();
+    expect(screen.getByRole('button', { name: '‹ Previous' })).toBeDisabled();
+
+    await fireEvent.press(screen.getByRole('button', { name: 'Next ›' }));
+
+    expect(await screen.findByText('Todo 1')).toBeOnTheScreen();
+    expect(screen.queryByText('Todo 12')).not.toBeOnTheScreen();
+    expect(screen.getByText('Page 2 of 2')).toBeOnTheScreen();
+    expect(screen.getByRole('button', { name: 'Next ›' })).toBeDisabled();
+
+    await fireEvent.press(screen.getByRole('button', { name: '‹ Previous' }));
+
+    expect(await screen.findByText('Todo 12')).toBeOnTheScreen();
+    expect(screen.getByText('Page 1 of 2')).toBeOnTheScreen();
   });
 });
