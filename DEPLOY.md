@@ -52,15 +52,15 @@ Bucket policy не нужна: файлы публично не открываю
 
 **EC2 → Launch instance**:
 
-| Поле                                    | Значение                                                                                             |
-| --------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| Name                                    | `todo-api`                                                                                           |
-| AMI                                     | **Ubuntu Server 24.04 LTS** (x86)                                                                    |
-| Instance type                           | **t3.micro**                                                                                         |
-| Key pair                                | создайте новую и сохраните `.pem` (нужна для SSH; можно обойтись EC2 Instance Connect из браузера)   |
-| Network settings → Security group       | новая: **SSH** (22) — My IP; **HTTP** (80) и **HTTPS** (443) — Anywhere. Порт 4000 **не** открывайте |
-| Storage                                 | 16 GiB gp3                                                                                           |
-| Advanced details → IAM instance profile | `todo-api-ec2`                                                                                       |
+| Поле                                    | Значение                                                                                           |
+| --------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| Name                                    | `todo-api`                                                                                         |
+| AMI                                     | **Ubuntu Server 24.04 LTS** или **Amazon Linux 2023** (скрипт установки поддерживает обе)          |
+| Instance type                           | **t3.micro**                                                                                       |
+| Key pair                                | создайте новую и сохраните `.pem` (нужна для SSH; можно обойтись EC2 Instance Connect из браузера) |
+| Network settings → Security group       | новая: **SSH** (22), **HTTP** (80) и **HTTPS** (443) — Anywhere. Порт 4000 **не** открывайте       |
+| Storage                                 | 16 GiB gp3                                                                                         |
+| Advanced details → IAM instance profile | `todo-api-ec2`                                                                                     |
 
 ### 2.4. Постоянный адрес (Elastic IP)
 
@@ -70,7 +70,7 @@ Bucket policy не нужна: файлы публично не открываю
 
 ### 2.5. Установка API
 
-Подключитесь к серверу: **EC2 → Instances → todo-api → Connect → EC2 Instance Connect**, или `ssh -i todo-api.pem ubuntu@<Elastic IP>`. Затем:
+Подключитесь к серверу: **EC2 → Instances → todo-api → Connect → EC2 Instance Connect**. Подключение из браузера идёт с адресов AWS, поэтому SSH (22) в security group должен быть открыт для Anywhere; если оставить «My IP», подключайтесь с компьютера: `ssh -i todo-api.pem ubuntu@<Elastic IP>` (на Amazon Linux пользователь `ec2-user`). Затем:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/offsya/todoListSenama/main/deploy/ec2/setup.sh | sudo bash
