@@ -1,0 +1,56 @@
+# The API tests (apps/server/test) on every push, with the same command as on a developer's
+# machine: `npm run test:api`. They run against their own MongoDB service container, started
+# for this job only: not MongoDB Atlas, not the EC2 server, not Amplify.
+name: API tests
+
+on:
+  push:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  api-tests:
+    name: API tests on MongoDB 8
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      mongodb:
+        image: mongo:8
+        ports:
+          - 27017:27017
+        # The job starts once MongoDB answers a ping.
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.runCommand({ ping: 1 }).ok'"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      # Read by apps/server/test/global-setup.ts instead of starting an in-memory MongoDB.
+      TEST_MONGODB_URI: mongodb://localhost:27017
+      # So the in-memory server's MongoDB binary is not even downloaded.
+      MONGOMS_DISABLE_POSTINSTALL: '1'
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: MongoDB version
+        run: docker exec "${{ job.services.mongodb.id }}" mongosh --quiet --eval 'db.version()'
+
+      - name: Run the API tests
+        run: npm run test:api
