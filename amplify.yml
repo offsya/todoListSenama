@@ -1,0 +1,24 @@
+# AWS Amplify Hosting: builds the web app (apps/web) on every push to the connected branch.
+# Set VITE_API_URL in the Amplify console (Hosting → Environment variables) to the API on EC2,
+# e.g. https://3-120-45-67.sslip.io. See deploy/README.md.
+version: 1
+frontend:
+  phases:
+    preBuild:
+      commands:
+        - nvm install 24
+        - nvm use 24
+        # Only the web app and the packages it uses: the mobile app's Expo toolchain is not needed.
+        - npm ci --workspace=@todo/web --workspace=@todo/client --workspace=@todo/shared --include-workspace-root --ignore-scripts --cache .npm --prefer-offline --no-audit --no-fund
+        - npm run build:packages
+    build:
+      commands:
+        - 'if [ -z "$VITE_API_URL" ]; then echo "Set VITE_API_URL in the Amplify environment variables"; exit 1; fi'
+        - npm run build -w @todo/web
+  artifacts:
+    baseDirectory: apps/web/dist
+    files:
+      - '**/*'
+  cache:
+    paths:
+      - .npm/**/*
