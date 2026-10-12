@@ -11,8 +11,18 @@ export interface Todo {
   completed: boolean;
   /** ISO-8601 timestamp after which an unfinished todo is overdue, or `null`. */
   dueDate: string | null;
+  /** The attached file, downloaded through `GET /todos/:id/attachment`, or `null`. */
+  attachment: TodoAttachment | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface TodoAttachment {
+  /** Original file name. */
+  name: string;
+  /** Size in bytes. */
+  size: number;
+  contentType: string;
 }
 
 /** One page of `GET /todos`. */
@@ -43,7 +53,8 @@ export type ApiErrorCode =
   | 'CONFLICT'
   | 'PAYLOAD_TOO_LARGE'
   | 'TOO_MANY_REQUESTS'
-  | 'INTERNAL_ERROR';
+  | 'INTERNAL_ERROR'
+  | 'SERVICE_UNAVAILABLE';
 
 export interface ValidationIssue {
   /** Dot-separated path to the invalid field, e.g. `email`; empty for object-level issues. */

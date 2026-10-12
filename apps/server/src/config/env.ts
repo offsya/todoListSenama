@@ -1,5 +1,9 @@
 import { z } from 'zod';
 
+/** Optional setting; an empty value (`S3_BUCKET=` in an env file) counts as not set. */
+const optionalString = () =>
+  z.preprocess((value) => (value === '' ? undefined : value), z.string().optional());
+
 const envSchema = z
   .object({
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -35,6 +39,12 @@ const envSchema = z
     TODOS_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(300),
     /** Number of reverse proxies in front of the API, so rate limiting sees real client IPs. */
     TRUST_PROXY: z.coerce.number().int().min(0).default(0),
+    /** Interface to listen on, e.g. 127.0.0.1 behind a reverse proxy on the same machine. */
+    HOST: optionalString(),
+    /** Private S3 bucket for todo attachments. Without it the attachment routes answer 503. */
+    S3_BUCKET: optionalString(),
+    /** Region of the bucket. Credentials come from the AWS default chain (the EC2 instance role). */
+    AWS_REGION: optionalString(),
   })
   .superRefine((env, ctx) => {
     // The .env.example value is fine locally but would let anyone mint tokens in production.
@@ -43,6 +53,13 @@ const envSchema = z
         code: 'custom',
         path: ['JWT_SECRET'],
         message: 'Replace the example JWT_SECRET from .env.example with a random secret',
+      });
+    }
+    if (env.S3_BUCKET && !env.AWS_REGION) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['AWS_REGION'],
+        message: 'Set AWS_REGION to the region of S3_BUCKET',
       });
     }
   });

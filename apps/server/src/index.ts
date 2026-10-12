@@ -8,15 +8,19 @@ const SHUTDOWN_TIMEOUT_MS = 10_000;
 async function main(): Promise<void> {
   await connectToDatabase(env.MONGODB_URI);
 
-  const server = createApp().listen(env.PORT, (error?: Error) => {
+  const onListening = (error?: Error) => {
     if (error) {
       // Express 5 reports listen errors (e.g. EADDRINUSE) here instead of throwing.
       logger.fatal({ err: error }, `Cannot listen on port ${env.PORT}`);
       void disconnectFromDatabase().finally(() => process.exit(1));
       return;
     }
-    logger.info(`API is listening on http://localhost:${env.PORT}`);
-  });
+    logger.info(`API is listening on http://${env.HOST ?? 'localhost'}:${env.PORT}`);
+  };
+  const app = createApp();
+  const server = env.HOST
+    ? app.listen(env.PORT, env.HOST, onListening)
+    : app.listen(env.PORT, onListening);
 
   const shutdown = (signal: NodeJS.Signals) => {
     logger.info({ signal }, 'Shutting down');

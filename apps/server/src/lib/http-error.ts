@@ -33,4 +33,8 @@ export class HttpError extends Error {
   static tooManyRequests(message: string): HttpError {
     return new HttpError(429, 'TOO_MANY_REQUESTS', message);
   }
+
+  static serviceUnavailable(message: string): HttpError {
+    return new HttpError(503, 'SERVICE_UNAVAILABLE', message);
+  }
 }

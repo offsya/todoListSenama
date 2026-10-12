@@ -2,6 +2,11 @@ import { z } from 'zod';
 
 export const TODO_TEXT_MAX_LENGTH = 500;
 
+/** Upper bound for a todo's attachment, in bytes. */
+export const MAX_ATTACHMENT_SIZE = 5 * 1024 * 1024;
+/** Name of the multipart field that carries the file in `POST /todos/:id/attachment`. */
+export const ATTACHMENT_FIELD = 'file';
+
 export const todoTextSchema = z
   .string({ error: 'Text must be a string' })
   .trim()
