@@ -6,7 +6,8 @@ frontend:
   phases:
     preBuild:
       commands:
-        - nvm install 24
+        # Without the build image's global tools (Amplify CLI, Cypress...): the app does not use them.
+        - nvm install 24 --skip-default-packages
         - nvm use 24
         # Only the web app and the packages it uses: the mobile app's Expo toolchain is not needed.
         - npm ci --workspace=@todo/web --workspace=@todo/client --workspace=@todo/shared --include-workspace-root --ignore-scripts --cache .npm --prefer-offline --no-audit --no-fund
