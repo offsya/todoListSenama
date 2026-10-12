@@ -24,6 +24,7 @@
     "smoke": "node --test --test-reporter=spec scripts/smoke-test.mjs",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
+    "test:api": "npm run test -w @todo/server -- --reporter=verbose",
     "prelint": "npm run build:packages",
     "lint": "eslint eslint.config.js scripts && npm run lint --workspaces --if-present",
     "format": "prettier --write .",
