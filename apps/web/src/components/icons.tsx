@@ -43,3 +43,17 @@ export const LogoutIcon = (props: IconProps) => (
     <path d="M21 12H9" />
   </svg>
 );
+
+export const PaperclipIcon = (props: IconProps) => (
+  <svg {...baseProps} {...props}>
+    <path d="m21 11.5-8.6 8.6a5.5 5.5 0 0 1-7.8-7.8l8.6-8.6a3.7 3.7 0 0 1 5.2 5.2l-8.6 8.6a1.8 1.8 0 0 1-2.6-2.6l7.9-7.9" />
+  </svg>
+);
+
+export const DownloadIcon = (props: IconProps) => (
+  <svg {...baseProps} {...props}>
+    <path d="M12 3v12" />
+    <path d="m7 10 5 5 5-5" />
+    <path d="M5 21h14" />
+  </svg>
+);

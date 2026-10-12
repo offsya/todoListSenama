@@ -46,6 +46,54 @@ describe('createApiClient', () => {
     expect(init.headers).toMatchObject({ Authorization: 'Bearer async-token' });
   });
 
+  it('passes the filter and the page in the query string', async () => {
+    const { api, fetch } = setup(jsonResponse(200, {}));
+
+    await api.todos.list({ filter: 'overdue', page: 2, limit: 5 });
+
+    expect(fetch.mock.calls[0]![0]).toBe(`${BASE_URL}/todos?filter=overdue&page=2&limit=5`);
+  });
+
+  it('uploads an attachment as multipart/form-data', async () => {
+    const { api, fetch } = setup(jsonResponse(200, { id: '1' }), { getToken: () => 'jwt' });
+    const form = new FormData();
+    form.append('file', new Blob(['hello']), 'hello.txt');
+
+    await expect(api.todos.uploadAttachment('1', form)).resolves.toEqual({ id: '1' });
+
+    const [url, init] = fetch.mock.calls[0]!;
+    expect(url).toBe(`${BASE_URL}/todos/1/attachment`);
+    expect(init.method).toBe('POST');
+    expect(init.body).toBe(form);
+    // fetch sets the multipart Content-Type with its boundary itself.
+    expect(init.headers).not.toHaveProperty('Content-Type');
+    expect(init.headers).toMatchObject({ Authorization: 'Bearer jwt' });
+  });
+
+  it('downloads an attachment as a Blob', async () => {
+    const { api, fetch } = setup(
+      new Response('file contents', { status: 200, headers: { 'Content-Type': 'text/plain' } }),
+      { getToken: () => 'jwt' },
+    );
+
+    const blob = await api.todos.downloadAttachment('1');
+
+    expect(await blob.text()).toBe('file contents');
+    expect(fetch.mock.calls[0]![0]).toBe(`${BASE_URL}/todos/1/attachment`);
+    expect(api.todos.attachmentUrl('1')).toBe(`${BASE_URL}/todos/1/attachment`);
+  });
+
+  it('reads the JSON error of a failed download', async () => {
+    const { api } = setup(
+      jsonResponse(404, { error: { code: 'NOT_FOUND', message: 'Todo not found' } }),
+    );
+
+    await expect(api.todos.downloadAttachment('1')).rejects.toMatchObject({
+      status: 404,
+      message: 'Todo not found',
+    });
+  });
+
   it('does not send the token to the login endpoint', async () => {
     const { api, fetch } = setup(jsonResponse(200, { token: 't', user: {} }), {
       getToken: () => 'stale-token',

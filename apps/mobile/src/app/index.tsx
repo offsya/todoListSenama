@@ -1,4 +1,11 @@
-import { getTodoFilter, useDeleteTodo, useSignOut, useTodoList, useUpdateTodo } from '@todo/client';
+import {
+  getTodoFilter,
+  useDeleteTodo,
+  useSignOut,
+  useTodoList,
+  useUpdateTodo,
+  useUploadAttachment,
+} from '@todo/client';
 import { getErrorMessage, type Todo } from '@todo/shared';
 import { Stack } from 'expo-router';
 import { useCallback, useState } from 'react';
@@ -9,6 +16,7 @@ import { KeyboardAvoidingContainer } from '../components/KeyboardAvoidingContain
 import { FilterTabs } from '../features/todos/FilterTabs';
 import { NewTodoForm } from '../features/todos/NewTodoForm';
 import { TodoItem } from '../features/todos/TodoItem';
+import { openAttachment, pickAttachment } from '../lib/attachments';
 import { makeStyles, radius, useColors } from '../theme';
 
 export default function TodosScreen() {
@@ -45,6 +53,21 @@ export default function TodosScreen() {
   );
   const destroy = useCallback((todo: Todo) => remove(todo.id), [remove]);
 
+  const uploadAttachment = useUploadAttachment({ onError: setActionError });
+  const { mutate: upload } = uploadAttachment;
+  const attach = useCallback(
+    (todo: Todo) => {
+      pickAttachment()
+        .then((form) => form && upload({ id: todo.id, form }))
+        .catch(setActionError);
+    },
+    [upload],
+  );
+  const openFile = useCallback((todo: Todo) => {
+    openAttachment(todo).catch(setActionError);
+  }, []);
+  const attachingId = uploadAttachment.isPending ? uploadAttachment.variables.id : undefined;
+
   const activeFilter = getTodoFilter(filter);
   const visible = todos.data?.items ?? [];
   const retryButton = <TextButton title="Retry" onPress={() => void todos.refetch()} />;
@@ -76,8 +99,17 @@ export default function TodosScreen() {
         <FlatList
           data={visible}
           keyExtractor={(todo) => todo.id}
+          extraData={attachingId}
           renderItem={({ item }) => (
-            <TodoItem todo={item} onToggle={toggle} onRename={rename} onDelete={destroy} />
+            <TodoItem
+              todo={item}
+              onToggle={toggle}
+              onRename={rename}
+              onDelete={destroy}
+              onAttach={attach}
+              onOpenAttachment={openFile}
+              attaching={item.id === attachingId}
+            />
           )}
           ListHeaderComponent={
             <View style={styles.header}>

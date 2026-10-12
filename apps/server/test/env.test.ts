@@ -38,6 +38,22 @@ describe('parseEnv', () => {
     expect(() => parseEnv(source)).toThrow(message);
   });
 
+  it('reads the S3 bucket for attachments and treats empty values as not set', () => {
+    expect(parseEnv({ JWT_SECRET: SECRET, S3_BUCKET: '', AWS_REGION: '' })).toMatchObject({
+      S3_BUCKET: undefined,
+      AWS_REGION: undefined,
+    });
+    expect(
+      parseEnv({ JWT_SECRET: SECRET, S3_BUCKET: 'todo-files', AWS_REGION: 'eu-central-1' }),
+    ).toMatchObject({ S3_BUCKET: 'todo-files', AWS_REGION: 'eu-central-1' });
+  });
+
+  it('requires the region of the S3 bucket', () => {
+    expect(() => parseEnv({ JWT_SECRET: SECRET, S3_BUCKET: 'todo-files' })).toThrow(
+      'Set AWS_REGION to the region of S3_BUCKET',
+    );
+  });
+
   it('refuses the example JWT secret in production', () => {
     const source = {
       NODE_ENV: 'production',

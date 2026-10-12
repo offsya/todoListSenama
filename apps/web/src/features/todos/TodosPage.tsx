@@ -2,10 +2,19 @@ import {
   getTodoFilter,
   TODO_FILTERS,
   useDeleteTodo,
+  useTodoClient,
   useTodoList,
   useUpdateTodo,
+  useUploadAttachment,
 } from '@todo/client';
-import { getErrorMessage, type TodoPage } from '@todo/shared';
+import {
+  ApiError,
+  ATTACHMENT_FIELD,
+  getErrorMessage,
+  MAX_ATTACHMENT_SIZE,
+  type Todo,
+  type TodoPage,
+} from '@todo/shared';
 import { useState } from 'react';
 import { Alert } from '../../components/Alert';
 import { Button } from '../../components/Button';
@@ -22,7 +31,35 @@ export function TodosPage() {
   const [actionError, setActionError] = useState<unknown>(null);
   const updateTodo = useUpdateTodo({ onError: setActionError });
   const deleteTodo = useDeleteTodo({ onError: setActionError });
+  const uploadAttachment = useUploadAttachment({ onError: setActionError });
+  const { api } = useTodoClient();
   const activeFilter = getTodoFilter(filter);
+
+  const attach = (todo: Todo, file: File) => {
+    if (file.size > MAX_ATTACHMENT_SIZE) {
+      setActionError(new ApiError(413, 'PAYLOAD_TOO_LARGE', `"${file.name}" is larger than 5 MB.`));
+      return;
+    }
+    const form = new FormData();
+    form.append(ATTACHMENT_FIELD, file);
+    uploadAttachment.mutate({ id: todo.id, form });
+  };
+
+  // The file is fetched with the token (there is no public link to it), then saved from memory.
+  const download = async (todo: Todo) => {
+    try {
+      const blob = await api.todos.downloadAttachment(todo.id);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = todo.attachment?.name ?? 'attachment';
+      link.click();
+      // Some browsers read the blob after click() returns.
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (error) {
+      setActionError(error);
+    }
+  };
 
   const retryButton = (
     <Button variant="ghost" onClick={() => void todos.refetch()}>
@@ -43,6 +80,9 @@ export function TodosPage() {
             onToggle={(completed) => updateTodo.mutate({ id: todo.id, changes: { completed } })}
             onRename={(text) => updateTodo.mutate({ id: todo.id, changes: { text } })}
             onDelete={() => deleteTodo.mutate(todo.id)}
+            onAttach={(file) => attach(todo, file)}
+            onDownload={() => void download(todo)}
+            attaching={uploadAttachment.isPending && uploadAttachment.variables.id === todo.id}
           />
         ))}
       </ul>

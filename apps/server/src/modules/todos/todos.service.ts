@@ -7,7 +7,11 @@ import type {
   UpdateTodoInput,
 } from '@todo/shared';
 import { trusted, type QueryFilter } from 'mongoose';
+import { randomUUID } from 'node:crypto';
+import type { Readable } from 'node:stream';
+import type { FileStorage } from '../../lib/file-storage.js';
 import { HttpError } from '../../lib/http-error.js';
+import { logger } from '../../lib/logger.js';
 import { TodoModel, toTodoDto } from './todo.model.js';
 
 /**
@@ -100,7 +104,85 @@ export async function updateTodo(
   return toTodoDto(todo);
 }
 
-export async function deleteTodo(ownerId: string, id: string): Promise<void> {
-  const { deletedCount } = await TodoModel.deleteOne({ _id: id, owner: ownerId });
-  if (deletedCount === 0) throw todoNotFound();
+export async function deleteTodo(
+  ownerId: string,
+  id: string,
+  storage: FileStorage | null,
+): Promise<void> {
+  const todo = await TodoModel.findOneAndDelete({ _id: id, owner: ownerId }).lean();
+  if (!todo) throw todoNotFound();
+  if (todo.attachment) await removeStoredFile(storage, todo.attachment.key);
+}
+
+// ---- Attachments -----------------------------------------------------------------------------
+
+export interface UploadedFile {
+  name: string;
+  contentType: string;
+  buffer: Buffer;
+}
+
+export interface AttachmentDownload {
+  name: string;
+  contentType: string;
+  size: number;
+  body: Readable;
+}
+
+/** A file left behind is only wasted space: log it instead of failing the request. */
+async function removeStoredFile(storage: FileStorage | null, key: string): Promise<void> {
+  try {
+    await storage?.delete(key);
+  } catch (error) {
+    logger.error({ err: error, key }, 'Failed to delete an attachment from the file storage');
+  }
+}
+
+/** Throws 404 unless the todo exists and belongs to the user, before the upload is stored. */
+export async function assertTodoExists(ownerId: string, id: string): Promise<void> {
+  if (!(await TodoModel.exists({ _id: id, owner: ownerId }))) throw todoNotFound();
+}
+
+/** Stores the file and attaches it to the todo, replacing the previous attachment. */
+export async function attachFile(
+  ownerId: string,
+  id: string,
+  file: UploadedFile,
+  storage: FileStorage,
+): Promise<Todo> {
+  // A fresh key per upload: a replaced file is never overwritten in place, so a download that
+  // is still streaming the old one is not cut off halfway.
+  const key = `attachments/${ownerId}/${id}/${randomUUID()}`;
+  await storage.put(key, file.buffer, file.contentType);
+
+  const attachment = {
+    key,
+    name: file.name,
+    contentType: file.contentType,
+    size: file.buffer.length,
+  };
+  const previous = await TodoModel.findOneAndUpdate(
+    { _id: id, owner: ownerId },
+    { $set: { attachment } },
+    { returnDocument: 'before' },
+  ).lean();
+  if (!previous) {
+    // The todo was deleted while the file was uploading.
+    await removeStoredFile(storage, key);
+    throw todoNotFound();
+  }
+  if (previous.attachment) await removeStoredFile(storage, previous.attachment.key);
+  return getTodo(ownerId, id);
+}
+
+export async function getAttachment(
+  ownerId: string,
+  id: string,
+  storage: FileStorage,
+): Promise<AttachmentDownload> {
+  const todo = await TodoModel.findOne({ _id: id, owner: ownerId }).lean();
+  if (!todo) throw todoNotFound();
+  if (!todo.attachment) throw HttpError.notFound('This todo has no attachment');
+  const { key, name, contentType, size } = todo.attachment;
+  return { name, contentType, size, body: await storage.get(key) };
 }

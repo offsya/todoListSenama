@@ -23,12 +23,20 @@ export interface ApiClientOptions {
 }
 
 interface RequestOptions {
+  /** Sent as JSON. */
   body?: unknown;
+  /** Sent as multipart/form-data, with the boundary the platform picks. */
+  form?: FormData;
   /** Attach the access token. Disabled for login/registration. */
   auth?: boolean;
+  /** Read a successful response as a file instead of JSON. */
+  responseType?: 'json' | 'blob';
+  timeoutMs?: number;
 }
 
 const DEFAULT_TIMEOUT_MS = 15_000;
+/** Files take longer than JSON, especially on a phone. */
+const FILE_TIMEOUT_MS = 120_000;
 
 export function createApiClient(options: ApiClientOptions) {
   const baseUrl = options.baseUrl.replace(/\/+$/, '');
@@ -39,7 +47,7 @@ export function createApiClient(options: ApiClientOptions) {
   async function request<T>(
     method: string,
     path: string,
-    { body, auth = true }: RequestOptions = {},
+    { body, form, auth = true, responseType = 'json', ...rest }: RequestOptions = {},
   ): Promise<T> {
     const headers: Record<string, string> = { Accept: 'application/json' };
     if (body !== undefined) headers['Content-Type'] = 'application/json';
@@ -48,7 +56,7 @@ export function createApiClient(options: ApiClientOptions) {
     if (token) headers.Authorization = `Bearer ${token}`;
 
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const timer = setTimeout(() => controller.abort(), rest.timeoutMs ?? timeoutMs);
 
     let response: Response;
     let payload: unknown;
@@ -56,12 +64,14 @@ export function createApiClient(options: ApiClientOptions) {
       response = await fetchFn(`${baseUrl}${path}`, {
         method,
         headers,
-        body: body === undefined ? undefined : JSON.stringify(body),
+        body: form ?? (body === undefined ? undefined : JSON.stringify(body)),
         signal: controller.signal,
       });
       // The timeout covers the body too: a connection that stalls halfway through the response
       // must not leave the request pending forever.
-      payload = response.status === 204 ? undefined : await readJson(response);
+      if (response.status === 204) payload = undefined;
+      else if (response.ok && responseType === 'blob') payload = await response.blob();
+      else payload = await readJson(response);
     } catch {
       if (controller.signal.aborted) {
         throw new ApiError(0, 'TIMEOUT', 'The server took too long to respond. Please try again.');
@@ -101,9 +111,24 @@ export function createApiClient(options: ApiClientOptions) {
       update: (id: string, input: UpdateTodoInput) =>
         request<Todo>('PUT', `/todos/${encodeURIComponent(id)}`, { body: input }),
       remove: (id: string) => request<void>('DELETE', `/todos/${encodeURIComponent(id)}`),
+      /**
+       * Attaches a file (replacing the previous one): `form` carries it in the
+       * `ATTACHMENT_FIELD` field. On React Native the value can be `{ uri, name, type }`.
+       */
+      uploadAttachment: (id: string, form: FormData) =>
+        request<Todo>('POST', attachmentPath(id), { form, timeoutMs: FILE_TIMEOUT_MS }),
+      downloadAttachment: (id: string) =>
+        request<Blob>('GET', attachmentPath(id), {
+          responseType: 'blob',
+          timeoutMs: FILE_TIMEOUT_MS,
+        }),
+      /** Absolute URL of the attachment, for platforms that download to disk themselves. */
+      attachmentUrl: (id: string) => `${baseUrl}${attachmentPath(id)}`,
     },
   };
 }
+
+const attachmentPath = (id: string) => `/todos/${encodeURIComponent(id)}/attachment`;
 
 export type ApiClient = ReturnType<typeof createApiClient>;
 

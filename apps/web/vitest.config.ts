@@ -12,7 +12,7 @@ export default defineConfig((configEnv) =>
       resolve: { conditions: [...defaultClientConditions] },
       test: {
         environment: 'jsdom',
-        setupFiles: ['./src/test/setup.ts'],
+        setupFiles: ['./src/test/node-form-data.js', './src/test/setup.ts'],
       },
     }),
   ),

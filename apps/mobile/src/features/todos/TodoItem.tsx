@@ -2,7 +2,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { formatDueDate, isOverdue, useTodoTextEditor } from '@todo/client';
 import { TODO_TEXT_MAX_LENGTH, type Todo } from '@todo/shared';
 import { memo, useState } from 'react';
-import { Platform, Pressable, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, Text, TextInput, View } from 'react-native';
 import { IconButton } from '../../components/IconButton';
 import { makeStyles, radius, useColors } from '../../theme';
 
@@ -11,6 +11,10 @@ interface TodoItemProps {
   onToggle: (todo: Todo) => void;
   onRename: (todo: Todo, text: string) => void;
   onDelete: (todo: Todo) => void;
+  onAttach: (todo: Todo) => void;
+  onOpenAttachment: (todo: Todo) => void;
+  /** The file is being uploaded. */
+  attaching?: boolean;
 }
 
 export const TodoItem = memo(function TodoItem({
@@ -18,6 +22,9 @@ export const TodoItem = memo(function TodoItem({
   onToggle,
   onRename,
   onDelete,
+  onAttach,
+  onOpenAttachment,
+  attaching = false,
 }: TodoItemProps) {
   const styles = useStyles();
   const colors = useColors();
@@ -50,15 +57,41 @@ export const TodoItem = memo(function TodoItem({
           onCancel={() => finishEditing()}
         />
       ) : (
-        <Pressable
-          style={styles.textButton}
-          onPress={() => setIsEditing(true)}
-          role="button"
-          aria-label={`Edit "${todo.text}"`}
-        >
-          <Text style={[styles.text, todo.completed && styles.textCompleted]}>{todo.text}</Text>
-          {todo.dueDate && <DueDate dueDate={todo.dueDate} overdue={isOverdue(todo)} />}
-        </Pressable>
+        <View style={styles.body}>
+          <Pressable
+            style={styles.textButton}
+            onPress={() => setIsEditing(true)}
+            role="button"
+            aria-label={`Edit "${todo.text}"`}
+          >
+            <Text style={[styles.text, todo.completed && styles.textCompleted]}>{todo.text}</Text>
+            {todo.dueDate && <DueDate dueDate={todo.dueDate} overdue={isOverdue(todo)} />}
+          </Pressable>
+          {todo.attachment && (
+            <Pressable
+              role="button"
+              aria-label={`Open ${todo.attachment.name}`}
+              onPress={() => onOpenAttachment(todo)}
+              style={({ pressed }) => [styles.attachment, pressed && styles.pressed]}
+            >
+              <Ionicons name="document-attach-outline" size={14} color={colors.primaryText} />
+              <Text style={styles.attachmentName} numberOfLines={1}>
+                {todo.attachment.name}
+              </Text>
+              <Text style={styles.attachmentSize}>{formatSize(todo.attachment.size)}</Text>
+            </Pressable>
+          )}
+        </View>
+      )}
+
+      {attaching ? (
+        <ActivityIndicator style={styles.attaching} color={colors.primary} />
+      ) : (
+        <IconButton
+          icon="attach-outline"
+          label={`${todo.attachment ? 'Replace the file of' : 'Attach a file to'} "${todo.text}"`}
+          onPress={() => onAttach(todo)}
+        />
       )}
 
       <IconButton
@@ -69,6 +102,12 @@ export const TodoItem = memo(function TodoItem({
     </View>
   );
 });
+
+function formatSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
 
 function DueDate({ dueDate, overdue }: { dueDate: string; overdue: boolean }) {
   const styles = useStyles();
@@ -151,9 +190,43 @@ const useStyles = makeStyles((colors) => ({
     borderColor: colors.primary,
     backgroundColor: colors.primary,
   },
-  textButton: {
+  body: {
     flex: 1,
-    paddingVertical: 8,
+    gap: 4,
+    paddingVertical: 4,
+  },
+  textButton: {
+    paddingVertical: 4,
+  },
+  attachment: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 6,
+    maxWidth: '100%',
+    minHeight: 32,
+    paddingHorizontal: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 999,
+    backgroundColor: colors.surfaceMuted,
+  },
+  attachmentName: {
+    flexShrink: 1,
+    color: colors.primaryText,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  attachmentSize: {
+    color: colors.textMuted,
+    fontSize: 12,
+  },
+  attaching: {
+    width: 44,
+    height: 44,
+  },
+  pressed: {
+    opacity: 0.85,
   },
   text: {
     color: colors.text,

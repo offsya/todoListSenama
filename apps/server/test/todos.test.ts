@@ -34,6 +34,7 @@ describe('POST /todos', () => {
       text: 'Buy milk',
       completed: false,
       dueDate: null,
+      attachment: null,
       createdAt: isoDate,
       updatedAt: isoDate,
     });

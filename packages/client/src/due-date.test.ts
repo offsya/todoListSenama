@@ -43,6 +43,7 @@ describe('filters', () => {
     text: 'T',
     completed,
     dueDate,
+    attachment: null,
     createdAt: '',
     updatedAt: '',
   });
