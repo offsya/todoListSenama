@@ -225,7 +225,7 @@ missing=$(grep -E '^(MONGODB_URI|CORS_ORIGIN|S3_BUCKET)=$' "$ENV_FILE" | cut -d=
 if grep -q '^MONGODB_URI=$' "$ENV_FILE"; then
   fail "Fill in $(echo $missing | sed 's/ /, /g') in $ENV_FILE (sudo nano $ENV_FILE), then run this script again."
 fi
-[ -z "$missing" ] || echo "Not set yet in $ENV_FILE: $missing (the API starts without them; see deploy/README.md)."
+[ -z "$missing" ] || echo "Not set yet in $ENV_FILE: $missing (the API starts without them; see DEPLOY.md)."
 
 log "systemd service $SERVICE"
 cat > /etc/systemd/system/$SERVICE.service <<EOF

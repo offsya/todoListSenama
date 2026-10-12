@@ -1,6 +1,6 @@
 # AWS Amplify Hosting: builds the web app (apps/web) on every push to the connected branch.
 # Set VITE_API_URL in the Amplify console (Hosting → Environment variables) to the API on EC2,
-# e.g. https://3-120-45-67.sslip.io. See deploy/README.md.
+# e.g. https://3-120-45-67.sslip.io. See DEPLOY.md.
 version: 1
 frontend:
   phases:
